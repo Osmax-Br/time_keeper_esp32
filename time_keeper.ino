@@ -1,3 +1,4 @@
+#include "ESPAsyncWebServer.h"
 #include <ETH.h>
 #include <WiFi.h>
 #include <WiFiAP.h>
@@ -17,13 +18,41 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "ThingSpeak.h"
+#include "html.h" 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+IPAddress local_IP(192, 168, 1, 199); //192.168.1.199
+IPAddress gateway(192, 168, 1, 1);
+IPAddress subnet(255, 255, 0, 0);
+IPAddress primaryDNS(8, 8, 8, 8);   //optional
+IPAddress secondaryDNS(8, 8, 4, 4); //optional
+AsyncWebServer server(80);
+
+// Replaces placeholder with DHT values
+String processor(const String& var){
+  //Serial.println(var);
+  if(var == "Timer"){
+    return timer_var();
+  }
+  else if(var == "Chosen_server"){
+    return chosen_var();
+    }
+  else if(var == "Pause"){
+    return pause_var();
+    }  
+  return String();
+}
+
+
+
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}};
-String str[2][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
-{"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec","Nothing"}};
+const int activities = 4;
+String str[activities][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
+{"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec","Nothing"},
+{"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/","Nothing"},
+{"musiq","eat","anime","/","/","/","phys","chimst","scienc","cook","famlyF","edit","Nothing"}};
 const long utcOffsetInSeconds = 7200;
 int hours=0;
 String day = "???";
@@ -44,9 +73,9 @@ int chosen = -1;
 int key_num = -48;
 char keys[ROW_NUM][COLUMN_NUM] = {
   {'1', '2', '3', 'A'},
-  {'4', '5', '6', 'B'},
+  {'4', '5', '6', 'D'},
   {'7', '8', '9', 'C'},
-  {'*', '0', '#', 'D'}
+  {'*', '0', '#', 'B'}
 };
 unsigned long myChannelNumber = 1;
 const char * myWriteAPIKey = "1B8PQM7MAYAT0WIO";
@@ -59,9 +88,10 @@ WiFiClient  clientt;
 Keypad keypad = Keypad( makeKeymap(keys), pin_rows, pin_column, ROW_NUM, COLUMN_NUM );
 String wrd;
 hw_timer_t * timer = NULL;
-long long sec,minu,hor;
+long sec,minu,hor;
 unsigned long lastTime = 0;
 unsigned long timerDelay = 30000;
+String new_sec,new_minu,new_hor = "00";
 int saving = -1;
 String saved_data[20];
 void IRAM_ATTR onTimer(){
@@ -80,12 +110,35 @@ void IRAM_ATTR onTimer(){
    hor =0;
    minu = 0;
    } 
-   
-   
-}
+   beautiful_int(sec,hor,minu);
+ }
+ 
+ String timer_var(){
+ return String(new_hor)+":"+String(new_minu)+":"+String(new_sec);
+  }
+String chosen_var(){
+    if(chosen==-1){
+      return "Nothing";
+    }
+  else{
+    return str[square][chosen] ;
+    }}
+String pause_var(){
+  if(startTimer==1){
+    return "Pause";
+    }
+  else if(startTimer == 2){
+    return "Resume";
+    }
+   else{
+    return "Start";
+    }}    
+  
 void setup() {
     Serial.begin(9600);
-
+if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
+    Serial.println("STA Failed to configure");
+  }
      if(WiFi.status() != WL_CONNECTED){
       Serial.print("Attempting to connect");
       while(WiFi.status() != WL_CONNECTED){
@@ -104,6 +157,30 @@ void setup() {
   timerAlarmWrite(timer, 1000000, true); // 1000000 * 1 us = 1 s, autoreload true
   timerAlarmEnable(timer); // enable
   ThingSpeak.begin(clientt);
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html, processor);
+  });
+  
+  server.on("/timer", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", timer_var().c_str());
+  });
+   server.on("/chosen_server", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", chosen_var().c_str());
+  });
+    server.on("/Pause", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    Serial.println("Resume");
+    request->send(200, "text/plain", "ok");
+  });
+  server.on("/btn", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", pause_var().c_str());
+  });
+
+  // Receive an HTTP GET request
+  server.on("/Resume", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    Serial.println("Pause");
+    request->send(200, "text/plain", "ok");
+  });
+  server.begin();
 }
 
 void loop() { 
@@ -124,8 +201,8 @@ if(key){
 if(lastPress+30000<millis()){
   display.ssd1306_command(SSD1306_DISPLAYOFF);
   } 
-if(key == '#'){
-  if(square==1){
+if(key == 'C'){
+  if(square==activities-1){
       square = 0;}
   else{
     square+=1;}}   
@@ -150,8 +227,7 @@ if(key_num != -48){
   
   
 if(a!=1){
-
-    main_screen(chosen,hor,minu,sec,key);
+    main_screen(chosen,hor,minu,sec,key,new_hor,new_minu,new_sec);
    drawer();  
  }
   
@@ -167,14 +243,12 @@ display.display();
 
 
 
-
-
 void drawer(){
   display.drawLine(0, 10, display.width() - 1, 10, WHITE);  
   }
 
 
-void main_screen(int chosen,int hor,int minu,int sec,char key){
+void main_screen(int chosen,int hor,int minu,int sec,char key,String new_hor,String new_minu,String new_sec ){
  display.clearDisplay();
    display.setCursor(0,40+15);
   display.setTextSize(1);
@@ -219,10 +293,10 @@ void main_screen(int chosen,int hor,int minu,int sec,char key){
  
  
  
- display.setCursor(20,0+15);
+ display.setCursor(17,0+15);
  display.setTextSize(2);
  char bufffer[40];
- sprintf(bufffer, "%i:%i:%i",hor,minu,sec);
+ sprintf(bufffer, "%s:%s:%s",new_hor,new_minu,new_sec);
 
 if (key=='B' and b==0) {
   start_hour = hours;
@@ -259,7 +333,7 @@ if(c==0){
   display.print("Saving..");
   if ((millis() - lastTime) > timerDelay){
     char datum[200];
-    sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,hor,minu,sec,hours,minutes,seconds);
+    sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,new_hor,new_minu,new_sec,hours,minutes,seconds);
     if(WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){
     int x = ThingSpeak.writeField(myChannelNumber, 1,datum, myWriteAPIKey);
     Serial.println(datum);
@@ -272,7 +346,7 @@ if(c==0){
     else{
       saving+=1;
       char datum[200];
-      sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,hor,minu,sec,hours,minutes,seconds);
+      sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,new_hor,new_minu,new_sec,hours,minutes,seconds);
       saved_data[saving]=datum;
       display.print("saved to var");
       Serial.println(saved_data[0]);
@@ -389,4 +463,42 @@ else if(key=='?'){
 else{
  key_num= key-'0';}
 }
-  
+
+
+void beautiful_int(int sec,int hor,int minu){
+  if(sec<10){
+    new_sec = "0" + String(sec);
+    }
+  else{
+    new_sec = String(sec);
+    }  
+  if(minu<10){
+    new_minu = "0" + String(minu);
+    }
+  else{
+    new_minu = String(minu);
+    }  
+    if(hor<10){
+    new_hor = "0" + String(hor);
+    }
+  else{
+    new_hor = String(hor);
+    }
+  }  
+ /*
+  *  const btn = document.getElementById('btn');
+btn.addEventListener('click', function handleClick() {
+const initialText = 'Pause';
+
+  if (btn.textContent.toLowerCase().includes(initialText.toLowerCase())) {
+    btn.textContent = 'Resume';
+     var xhr = new XMLHttpRequest();
+     xhr.open("GET", "/" + 'Resume', true);
+     xhr.send();
+  } else {
+    btn.textContent = initialText;
+     var xhr = new XMLHttpRequest();
+     xhr.open("GET", "/" + initialText, true);
+     xhr.send();
+  }});
+  */ 
