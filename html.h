@@ -52,7 +52,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   </h2>  
   </p>
   <p><h3>chosen : <span id="chosen_server">%Chosen_server%</span></h3></p>
-  <p><button id = "brtt"><span id="btn">%Pause%</button></p>
+  <p><button id = "btn" class = "pause_button" onclick="toggleCheckbox()"><span id="btn">%Pause%</button></p>
 </body>
 <script>
 setInterval(function ( ) {
@@ -85,6 +85,10 @@ setInterval(function ( ) {
   xhttp.open("GET", "/btn", true);
   xhttp.send();
 }, 1000 ) ;
-
+function toggleCheckbox() {
+     var xhr = new XMLHttpRequest();
+     xhr.open("GET", "/PauseBtn" , true);
+     xhr.send();
+   }
 </script>
 </html>)rawliteral";

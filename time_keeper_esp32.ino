@@ -183,6 +183,18 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
     Serial.println("Pause");
     request->send(200, "text/plain", "ok");
   });
+   server.on("/PauseBtn", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    if(d==0){
+      d=1;
+      c=2;
+      }
+    else if(d==1){
+      d=0;
+      c=1;
+      }  
+    
+    request->send(200, "text/plain", "ok");
+  });
   server.begin();
   pinMode(19,OUTPUT);
 }
@@ -385,8 +397,8 @@ else if(c==2){
  int savings = saving;
  if(saving>-1 and WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){
   display.print("saving");
-      for(int i=0;i<savings+1;){
-        if((millis() - lastTime) > timerDelay){
+      for(int i=0;i<savings +1;){
+        if((millis() - lastTime ) > timerDelay){
           Serial.print("saving ");
           Serial.println(saved_data[i]);
       int x = ThingSpeak.writeField(myChannelNumber,1,saved_data[i], myWriteAPIKey);
