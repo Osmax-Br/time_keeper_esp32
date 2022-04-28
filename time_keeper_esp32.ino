@@ -82,7 +82,7 @@ const char * myWriteAPIKey = "1B8PQM7MAYAT0WIO";
 // 5 --> 13
 //18 --> 12
 // 19 --> 14
-byte pin_rows[ROW_NUM]      = {19, 18, 5, 17};
+byte pin_rows[ROW_NUM]      = {32, 18 , 5, 17};
 byte pin_column[COLUMN_NUM] = {16, 4, 0, 2};
 int a,b,c,d,square,saved,startTimer,lastPress,lastUpdate =0 ;
 int start_hour,start_minute,start_second,end_hour,end_minutes_end_second = 0;
@@ -184,9 +184,11 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
     request->send(200, "text/plain", "ok");
   });
   server.begin();
+  pinMode(19,OUTPUT);
 }
 
 void loop() { 
+  
 if(Serial.available()) {
   String dd = Serial.readStringUntil('T');
   if(dd == "off"){
@@ -504,4 +506,16 @@ const initialText = 'Pause';
      xhr.open("GET", "/" + initialText, true);
      xhr.send();
   }});
+
+
+ #define SD_CS 23
+#define SD_SCK 17
+#define SD_MOSI 12
+#define SD_MISO 13
+SPIClass sd_spi(HSPI);
+sd_spi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+if (!SD.begin(SD_CS, sd_spi))
+  Serial.println("SD Card: mounting failed.");
+else
+  Serial.println("SD Card: mounted.");
   */ 
