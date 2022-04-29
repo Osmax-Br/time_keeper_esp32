@@ -17,7 +17,7 @@ const char index_html[] PROGMEM = R"rawliteral(
       vertical-align:middle;
       padding-bottom: 15px;
     }
-      .bttn {
+      .pause_button {
         padding: 10px 20px;
         font-size: 24px;
         text-align: center;
@@ -36,8 +36,8 @@ const char index_html[] PROGMEM = R"rawliteral(
         user-select: none;
         -webkit-tap-highlight-color: rgba(0,0,0,0);
       }  
-      .bttn:hover {background-color: #1f2e45}
-      .bttn:active {
+      .pause_button:hover {background-color: #1f2e45}
+      .pause_button:active {
         background-color: #1f2e45;
         box-shadow: 0 4px #666;
         transform: translateY(2px);
@@ -53,8 +53,14 @@ const char index_html[] PROGMEM = R"rawliteral(
   </p>
   <p><h3>chosen : <span id="chosen_server">%Chosen_server%</span></h3></p>
   <p><button id = "btn" class = "pause_button" onclick="toggleCheckbox()"><span id="btn">%Pause%</button></p>
+  <form action="/choseee">
+    choose activity : <input type="text" name="input1">
+    <input type="submit" value="Submit">
+  </form><br>
+
 </body>
 <script>
+
 setInterval(function ( ) {
   var xhttp = new XMLHttpRequest();
   xhttp.onreadystatechange = function() {
@@ -92,3 +98,9 @@ function toggleCheckbox() {
    }
 </script>
 </html>)rawliteral";
+/*
+ <form action = "javascript:handleIt()">
+  <input type="text" name="input1">
+  <input name="Submit"  type="submit" value="send"/>
+    </form>
+*/

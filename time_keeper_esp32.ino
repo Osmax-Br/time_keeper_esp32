@@ -52,8 +52,8 @@ const int activities = 4;
 String str[activities][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
 {"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec","Nothing"},
 {"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/","Nothing"},
-{"musiq","eat","anime","/","/","/","phys","chimst","scienc","cook","famlyF","edit","Nothing"}};
-const long utcOffsetInSeconds = 7200;
+{"/","/","/","/","/","/","/","/","/","/","/","/","Nothing"}};
+const long utcOffsetInSeconds = 7200+3600;
 int hours=0;
 String day = "???";
 int minutes = 0;
@@ -177,8 +177,6 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
   server.on("/btn", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", pause_var().c_str());
   });
-
-  // Receive an HTTP GET request
   server.on("/Resume", HTTP_GET, [] (AsyncWebServerRequest *request) {
     Serial.println("Pause");
     request->send(200, "text/plain", "ok");
@@ -195,6 +193,32 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
     
     request->send(200, "text/plain", "ok");
   });
+  server.on("/choseee", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    String inputMessage;
+    String inputParam;
+    // GET input1 value on <ESP_IP>/get?input1=<inputMessage>
+    if (request->hasParam("input1")) {
+      inputMessage = request->getParam("input1")->value();
+      inputParam = "input1";
+    }
+    if(chosen < 12 && chosen != -1 && chosen != 12){
+     chosen +=1 ;
+    }
+    else if(chosen == -1 || chosen == 12){
+     for(int i =0 ; i<12 ;i++){
+      if(str[3][i] == "/"){
+        chosen = i;
+        break;
+     }
+     else{
+     chosen = 0;
+     }}
+    }
+    square = 3 ;
+    str[3][chosen] = inputMessage;
+    request->send(200, "text/html", " <meta http-equiv='refresh' content='0; URL=http://192.168.1.199/'> ");
+  });
+ 
   server.begin();
   pinMode(19,OUTPUT);
 }
@@ -225,8 +249,6 @@ if(key == 'C'){
     square+=1;}}   
 if(key=='A' and a!=1) {
   display.clearDisplay();
-  
-
   print_label(key);
   a=1;
   key = '?';
