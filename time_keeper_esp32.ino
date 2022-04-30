@@ -84,7 +84,7 @@ const char * myWriteAPIKey = "1B8PQM7MAYAT0WIO";
 // 19 --> 14
 byte pin_rows[ROW_NUM]      = {32, 18 , 5, 17};
 byte pin_column[COLUMN_NUM] = {16, 4, 0, 2};
-int a,b,c,d,square,saved,startTimer,lastPress,lastUpdate =0 ;
+int pressA,pressB,counter_var,pressStar,square,saved,startTimer,lastPress,lastUpdate =0 ;
 int start_hour,start_minute,start_second,end_hour,end_minutes_end_second = 0;
 int pressed = -1;
 WiFiClient  clientt;
@@ -114,29 +114,7 @@ void IRAM_ATTR onTimer(){
    minu = 0;
    } 
    beautiful_int(sec,hor,minu);
- }
- 
- String timer_var(){
- return String(new_hor)+":"+String(new_minu)+":"+String(new_sec);
-  }
-String chosen_var(){
-    if(chosen==-1){
-      return "Nothing";
-    }
-  else{
-    return str[square][chosen] ;
-    }}
-String pause_var(){
-  if(startTimer==1){
-    return "Pause";
-    }
-  else if(startTimer == 2){
-    return "Resume";
-    }
-   else{
-    return "Start";
-    }}    
-  
+ } 
 void setup() {
     Serial.begin(9600);
 if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
@@ -160,6 +138,62 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
   timerAlarmWrite(timer, 1000000, true); // 1000000 * 1 us = 1 s, autoreload true
   timerAlarmEnable(timer); // enable
   ThingSpeak.begin(clientt);
+  web_server();
+  pinMode(19,OUTPUT);
+}
+
+void loop() { 
+char key = keypad.getKey();  
+if(key){
+  display.ssd1306_command(SSD1306_DISPLAYON);
+  lastPress = millis();
+  }  
+if(lastPress+30000<millis()){
+  display.ssd1306_command(SSD1306_DISPLAYOFF);
+  } 
+if(key == 'C'){
+  if(square==activities-1){
+      square = 0;}
+  else{
+    square+=1;
+    }
+     display.clearDisplay();
+    print_label(square);
+    pressA = 1;
+    key = '?';
+    }   
+if(key=='A' and pressA!=1) {
+  int lastSquare = square;
+  display.clearDisplay();
+  print_label(square);
+  pressA=1;
+  key = '?';
+}
+else if(key=='A' and pressA==1){
+display.clearDisplay();
+display.display();
+pressA=0;}
+if(pressA==1){
+edit_key(key);
+if(key_num != -48){
+    chosen = key_num-1;
+  }} 
+if(pressA!=1){
+    main_screen(chosen,hor,minu,sec,key,new_hor,new_minu,new_sec);
+   drawer();  
+ }
+  
+display.display();
+}
+
+
+
+
+
+
+
+
+void web_server(){
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, processor);
   });
@@ -182,26 +216,26 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
     request->send(200, "text/plain", "ok");
   });
    server.on("/PauseBtn", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    if(d==0){
-      d=1;
-      c=2;
+    if(pressStar==0){
+      pressStar=1;
+      counter_var=2;
       }
-    else if(d==1){
-      d=0;
-      c=1;
+    else if(pressStar==1){
+      pressStar=0;
+      counter_var=1;
       }  
     
     request->send(200, "text/plain", "ok");
   });
   server.on("/choseee", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    String inputMessage;
+    String inputMessage = "";
     String inputParam;
     // GET input1 value on <ESP_IP>/get?input1=<inputMessage>
     if (request->hasParam("input1")) {
       inputMessage = request->getParam("input1")->value();
       inputParam = "input1";
-    }
-    if(chosen < 12 && chosen != -1 && chosen != 12){
+      
+    if(chosen < 12 && chosen != -1 && chosen != 12 ){
      chosen +=1 ;
     }
     else if(chosen == -1 || chosen == 12){
@@ -214,80 +248,44 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
      chosen = 0;
      }}
     }
+    else{
+      chosen = 0;
+    }
     square = 3 ;
-    str[3][chosen] = inputMessage;
+    str[3][chosen] = inputMessage;}
     request->send(200, "text/html", " <meta http-equiv='refresh' content='0; URL=http://192.168.1.199/'> ");
   });
  
   server.begin();
-  pinMode(19,OUTPUT);
 }
 
-void loop() { 
-  
-if(Serial.available()) {
-  String dd = Serial.readStringUntil('T');
-  if(dd == "off"){
-    WiFi.disconnect();
+String timer_var(){
+ return String(new_hor)+":"+String(new_minu)+":"+String(new_sec);
+  }
+String chosen_var(){
+    if(chosen==-1){
+      return "Nothing";
     }
-  if(dd == "on"){
-    WiFi.begin(ssid, password);
-    }  
-}
-char key = keypad.getKey();  
-if(key){
-  display.ssd1306_command(SSD1306_DISPLAYON);
-  lastPress = millis();
-  }  
-if(lastPress+30000<millis()){
-  display.ssd1306_command(SSD1306_DISPLAYOFF);
-  } 
-if(key == 'C'){
-  if(square==activities-1){
-      square = 0;}
   else{
-    square+=1;}}   
-if(key=='A' and a!=1) {
-  display.clearDisplay();
-  print_label(key);
-  a=1;
-  key = '?';
-}
-else if(key=='A' and a==1){
-display.clearDisplay();
-display.display();
-a=0;}
-if(a==1){
-edit_key(key);
-if(key_num != -48){
-    chosen = key_num-1;
-  }}
-
-  
-  
-if(a!=1){
-    main_screen(chosen,hor,minu,sec,key,new_hor,new_minu,new_sec);
-   drawer();  
- }
-  
-display.display();
-}
-
-
-
-
-
-
-
-
-
+    return str[square][chosen] ;
+    }}
+String pause_var(){
+  if(startTimer==1){
+    return "Pause";
+    }
+  else if(startTimer == 2){
+    return "Resume";
+    }
+   else{
+    return "Start";
+    }}
 
 void drawer(){
   display.drawLine(0, 10, display.width() - 1, 10, WHITE);  
   }
 
 
-void main_screen(int chosen,int hor,int minu,int sec,char key,String new_hor,String new_minu,String new_sec ){
+void main_screen(int chosen,int hor,int minu,int sec,char key,String new_hor,String new_minu,String new_sec){
  display.clearDisplay();
    display.setCursor(0,40+15);
   display.setTextSize(1);
@@ -337,39 +335,40 @@ void main_screen(int chosen,int hor,int minu,int sec,char key,String new_hor,Str
  char bufffer[40];
  sprintf(bufffer, "%s:%s:%s",new_hor,new_minu,new_sec);
 
-if (key=='B' and b==0) {
+if (key=='B' and pressB==0) {
   start_hour = hours;
   start_minute = minutes;
   start_second = seconds;
-  c=1;
-  b=1;
+  counter_var=1;
+  pressB=1;
   startTimer = 1;
   key = '1';
   pressed+=1;
 }
-else if(key=='B' and b==1){
+else if(key=='B' and pressB==1){
 display.clearDisplay();
 display.display();
-b=0;
-c=0;
+pressB=0;
+counter_var=0;
 key = '1';
 }
 
-if(key=='*' and d==0){
+if(key=='*' and pressStar==0){
 display.clearDisplay();
 display.display();  
-d=1;
-c=2;
+pressStar=1;
+counter_var=2;
 key = '1';
   }
-else if(key=='*' and d==1){
-  d=0;
-  c=1;
+else if(key=='*' and pressStar==1){
+  pressStar=0;
+  counter_var=1;
   }  
-if(c==0){
+if(counter_var==0){
   if(pressed >= 0 and chosen!=-1){
-  //display.clearDisplay();
+  display.clearDisplay();
   display.print("Saving..");
+  display.display();
   if ((millis() - lastTime) > timerDelay){
     char datum[200];
     sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,new_hor,new_minu,new_sec,hours,minutes,seconds);
@@ -401,12 +400,12 @@ if(c==0){
   startTimer = 0;
 
 }
-else if(c==1){
+else if(counter_var==1){
   display.print(bufffer);
   startTimer = 1;
 }
 
-else if(c==2){
+else if(counter_var==2){
   display.print(bufffer);
   startTimer = 2;
 }
@@ -441,7 +440,7 @@ else if(c==2){
         
 
 
-void print_label(char key) {
+void print_label(int square) {
   display.setTextSize(1);
   draw_grid();
   for(int i=0;i<12;i++){  
@@ -525,23 +524,6 @@ void beautiful_int(int sec,int hor,int minu){
     }
   }  
  /*
-  *  const btn = document.getElementById('btn');
-btn.addEventListener('click', function handleClick() {
-const initialText = 'Pause';
-
-  if (btn.textContent.toLowerCase().includes(initialText.toLowerCase())) {
-    btn.textContent = 'Resume';
-     var xhr = new XMLHttpRequest();
-     xhr.open("GET", "/" + 'Resume', true);
-     xhr.send();
-  } else {
-    btn.textContent = initialText;
-     var xhr = new XMLHttpRequest();
-     xhr.open("GET", "/" + initialText, true);
-     xhr.send();
-  }});
-
-
  #define SD_CS 23
 #define SD_SCK 17
 #define SD_MOSI 12
