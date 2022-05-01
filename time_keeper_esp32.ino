@@ -157,10 +157,13 @@ if(key == 'C'){
   else{
     square+=1;
     }
+    if(pressA == 1){
      display.clearDisplay();
     print_label(square);
     pressA = 1;
     key = '?';
+    }
+    
     }   
 if(key=='A' and pressA!=1) {
   int lastSquare = square;
