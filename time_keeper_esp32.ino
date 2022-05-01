@@ -118,15 +118,15 @@ void IRAM_ATTR onTimer(){
 void setup() {
     Serial.begin(9600);
 if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-    Serial.println("STA Failed to configure");
+   
   }
      if(WiFi.status() != WL_CONNECTED){
-      Serial.print("Attempting to connect");
+     
       while(WiFi.status() != WL_CONNECTED){
         WiFi.begin(ssid, password);  
         break;    
       } 
-      Serial.println("\nConnected.");
+     
     }
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
@@ -162,9 +162,7 @@ if(key == 'C'){
     print_label(square);
     pressA = 1;
     key = '?';
-    }
-    
-    }   
+    }}   
 if(key=='A' and pressA!=1) {
   int lastSquare = square;
   display.clearDisplay();
@@ -208,14 +206,12 @@ void web_server(){
     request->send_P(200, "text/plain", chosen_var().c_str());
   });
     server.on("/Pause", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    Serial.println("Resume");
     request->send(200, "text/plain", "ok");
   });
   server.on("/btn", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", pause_var().c_str());
   });
   server.on("/Resume", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    Serial.println("Pause");
     request->send(200, "text/plain", "ok");
   });
    server.on("/PauseBtn", HTTP_GET, [] (AsyncWebServerRequest *request) {
@@ -304,7 +300,7 @@ void main_screen(int chosen,int hor,int minu,int sec,char key,String new_hor,Str
   if(lastUpdate+120000<millis()){
  timeClient.update();
  lastUpdate = millis();
- Serial.println("update!");
+
  }
  else if(millis()<10000){
   timeClient.update();
@@ -377,12 +373,12 @@ if(counter_var==0){
     sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,new_hor,new_minu,new_sec,hours,minutes,seconds);
     if(WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){
     int x = ThingSpeak.writeField(myChannelNumber, 1,datum, myWriteAPIKey);
-    Serial.println(datum);
+    
     if(x == 200){
        display.println("saved!"); 
        delay(500);}
     else{
-      Serial.println("error");
+      
     }}
     else{
       saving+=1;
@@ -390,9 +386,6 @@ if(counter_var==0){
       sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,new_hor,new_minu,new_sec,hours,minutes,seconds);
       saved_data[saving]=datum;
       display.print("saved to var");
-      Serial.println(saved_data[0]);
-      Serial.println(saved_data[1]);
-      Serial.println(saved_data[2]);
       delay(500);
       }}
       lastTime = millis();
@@ -423,16 +416,12 @@ else if(counter_var==2){
   display.print("saving");
       for(int i=0;i<savings +1;){
         if((millis() - lastTime ) > timerDelay){
-          Serial.print("saving ");
-          Serial.println(saved_data[i]);
       int x = ThingSpeak.writeField(myChannelNumber,1,saved_data[i], myWriteAPIKey);
       if(x==200){
-       Serial.println("saving sucess");
        i++;
        saving -=1;
        }
        else{
-        Serial.println("error");
         }
        lastTime = millis();
        }
@@ -473,15 +462,14 @@ if (key != '*') {
 display.clearDisplay();
 wrd += key;
 display.print(wrd);
-Serial.println(wrd);
 }
 else {
-  Serial.println(wrd);
+  
   display.clearDisplay();
   int len;
   len = wrd.length();
   wrd = wrd.substring(0, len - 1);
-  Serial.println(wrd);
+  
   display.print(wrd);
 }
 display.display();

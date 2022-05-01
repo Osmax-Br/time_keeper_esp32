@@ -7,7 +7,6 @@ const char index_html[] PROGMEM = R"rawliteral(
    @import url('https://fonts.googleapis.com/css?family=Lato');
 body {
    background: linear-gradient(to top, #1E2935 ,#090A0F);
-   
  background-attachment: fixed;
   overflow-y: hidden;
   background-color : black;
@@ -67,7 +66,16 @@ body {
 .timer{
   font-family: 'Orbitron', sans-serif;
   font-size: 128px;
+  background: -webkit-linear-gradient(white, #38495a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
+.chosenn{
+ background: -webkit-linear-gradient(white, #38495a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent
+}
+
 #stars {
   width: 1px;
   height: 1px;
@@ -141,7 +149,7 @@ body {
     <span id="timer" class = "timer">%Timer%</span>
   </h1>  
   </p>
-  <p><h3>chosen : <span id="chosen_server">%Chosen_server%</span></h3></p>
+  <p><h3 class = "chosenn">chosen : <span id="chosen_server">%Chosen_server%</span></h3></p>
   <p><button id = "btn" class = "pause_button" onclick="toggleCheckbox()"><span id="btn">%Pause%</button></p>
   <br>
   <form action="/choseee">
