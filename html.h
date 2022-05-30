@@ -198,9 +198,3 @@ function toggleCheckbox() {
         }; 
 </script>
 </html>)rawliteral";
-/*
- <form action = "javascript:handleIt()">
-  <input type="text" name="input1">
-  <input name="Submit"  type="submit" value="send"/>
-    </form>
-*/

@@ -19,6 +19,18 @@
 #include <Adafruit_SSD1306.h>
 #include "ThingSpeak.h"
 #include "html.h" 
+#include <stdio.h>
+#include <stdlib.h>
+#include <sqlite3.h>
+#include <SPI.h>
+#include <FS.h>
+#include "SD.h"
+#include "sd_card_core.h"
+#include <IRremote.h>
+#define SD_CS 23
+#define SD_SCK 17
+#define SD_MOSI 12
+#define SD_MISO 13
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
@@ -45,8 +57,8 @@ String processor(const String& var){
   return String();
 }
 
-
-
+String irkey = "";
+String irCode[4][2] = {{"202b04f","status"},{"2026897","pause"},{"202e817","resume"},{"20250af","upload"}};
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}};
 const int activities = 4;
 String str[activities][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
@@ -79,10 +91,10 @@ char keys[ROW_NUM][COLUMN_NUM] = {
 };
 unsigned long myChannelNumber = 1;
 const char * myWriteAPIKey = "1B8PQM7MAYAT0WIO";
-// 5 --> 13
-//18 --> 12
-// 19 --> 14
-byte pin_rows[ROW_NUM]      = {32, 18 , 5, 17};
+const int RECV_PIN = 15;
+IRrecv irrecv(RECV_PIN);
+decode_results results;
+byte pin_rows[ROW_NUM]      = {32, 18 , 5, 25};
 byte pin_column[COLUMN_NUM] = {16, 4, 0, 2};
 int pressA,pressB,counter_var,pressStar,square,saved,startTimer,lastPress,lastUpdate =0 ;
 int start_hour,start_minute,start_second,end_hour,end_minutes_end_second = 0;
@@ -97,6 +109,7 @@ unsigned long timerDelay = 30000;
 String new_sec,new_minu,new_hor = "00";
 int saving = -1;
 String saved_data[20];
+const char* database_init = "CREATE table if not exists times(begin_hour int,  begin_minute int,  end_hour int,  end_minute int,  hours int,  minutes int,  seconds int,chosen string);";
 void IRAM_ATTR onTimer(){
   if(startTimer == 1){
   sec+=1;
@@ -117,12 +130,13 @@ void IRAM_ATTR onTimer(){
  } 
 void setup() {
     Serial.begin(9600);
+    
 if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
    
   }
+  int connection_begin = millis();
      if(WiFi.status() != WL_CONNECTED){
-     
-      while(WiFi.status() != WL_CONNECTED){
+      while(WiFi.status() != WL_CONNECTED && millis() <= connection_begin+20000){
         WiFi.begin(ssid, password);  
         break;    
       } 
@@ -139,9 +153,11 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
   timerAlarmEnable(timer); // enable
   ThingSpeak.begin(clientt);
   web_server();
-  pinMode(19,OUTPUT);
+  pinMode(19,OUTPUT); 
+  pinMode(27,OUTPUT);  
+  irrecv.enableIRIn();
+  irrecv.blink13(true);
 }
-
 void loop() { 
 char key = keypad.getKey();  
 if(key){
@@ -180,16 +196,57 @@ if(key_num != -48){
     chosen = key_num-1;
   }} 
 if(pressA!=1){
-    main_screen(chosen,hor,minu,sec,key,new_hor,new_minu,new_sec);
+    main_screen(chosen,hor,minu,sec,key,new_hor,new_minu,new_sec,irkey);
    drawer();  
  }
-  
+
+
+ if (irrecv.decode(&results)){
+        irkey = String(results.value, HEX); 
+       // Serial.println(irkey);
+        //Serial.println(results.value, HEX);
+        irrecv.resume();
+  } 
+  if(irkey == irCode[0][0]){
+    irkey = "";
+    if(startTimer == 1){
+      resume_tone(27);
+    }
+    else{
+      pause_tone(27);
+    }
+   }
+   else if(irkey == irCode[1][0]){
+     irkey = "";
+     pause_tone(27);
+     //startTimer = 2;
+     pressStar=1;
+     counter_var=2;
+   }
+   else if(irkey == irCode[2][0]){
+     irkey = "";
+     resume_tone(27);
+    // startTimer = 1;
+    pressStar=0;
+    counter_var=1;
+   }
+
+
+
+
 display.display();
 }
 
 
 
-
+/*
+if(irkey == irCode[0][0]){
+    begin_millis = millis();
+    digitalWrite(19,HIGH);}
+    if(millis() >= begin_millis+1000){
+      digitalWrite(19,LOW);
+    }
+*/
 
 
 
@@ -514,15 +571,40 @@ void beautiful_int(int sec,int hor,int minu){
     new_hor = String(hor);
     }
   }  
- /*
- #define SD_CS 23
-#define SD_SCK 17
-#define SD_MOSI 12
-#define SD_MISO 13
-SPIClass sd_spi(HSPI);
-sd_spi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-if (!SD.begin(SD_CS, sd_spi))
-  Serial.println("SD Card: mounting failed.");
-else
-  Serial.println("SD Card: mounted.");
-  */ 
+
+void resume_tone(int ledPin){
+  int ledState = LOW;             // ledState used to set the LED
+  unsigned long previousMillis = 0;
+  const long interval = 80;
+  for(int i =0 ; i<4 ;){
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    if (ledState == LOW) {
+      ledState = HIGH;
+    } else {
+      ledState = LOW;}
+    digitalWrite(ledPin, ledState);
+    i++;}}
+  }
+
+void pause_tone(int ledPin){
+  int ledState = 0;             // ledState used to set the LED
+  unsigned long previousMillis = 0;
+  const long interval = 220;
+  for(int i = 0 ; i<2 ; ){
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    if (ledState == 0) {
+      ledState = 1;
+    } else {
+      ledState = 0;}
+      i++;
+    digitalWrite(ledPin, ledState);}}
+  }  
+
+  void get_ir_data(){
+
+    
+  }
