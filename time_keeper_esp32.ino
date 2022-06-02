@@ -1,20 +1,22 @@
 #include "ESPAsyncWebServer.h"
+#include <ArduinoJson.h>
+#include <HTTPClient.h>
 #include <ETH.h>
 #include <WiFi.h>
-#include <WiFiAP.h>
+//#include <WiFiAP.h>
 #include <WiFiClient.h>
-#include <WiFiGeneric.h>
-#include <WiFiMulti.h>
-#include <WiFiScan.h>
+//#include <WiFiGeneric.h>
+//#include <WiFiMulti.h>
+//#include <WiFiScan.h>
 #include <WiFiServer.h>
-#include <WiFiSTA.h>
-#include <WiFiType.h>
+//#include <WiFiSTA.h>
+//#include <WiFiType.h>
 #include <WiFiUdp.h>
 #include <Keypad.h>
 #include <NTPClient.h>
 #include <SPI.h>
 #include <Wire.h>
-#include <WiFiUdp.h>
+//#include <WiFiUdp.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include "ThingSpeak.h"
@@ -59,6 +61,13 @@ String processor(const String& var){
 
 String irkey = "";
 String irCode[4][2] = {{"202b04f","status"},{"2026897","pause"},{"202e817","resume"},{"20250af","upload"}};
+String serverName = "http://codeforces.com/api/contest.list";
+unsigned long lastTime_cf = 0;
+unsigned long timerDelay_cf = 200000;
+int temp_cf[11];
+int ContestTime [9] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
+String ContestDiv [9] = {"div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1"};
+String ContestPhase [9] = {"na","na","na","na","na","na","na","na","na"};
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}};
 const int activities = 4;
 String str[activities][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
@@ -96,7 +105,7 @@ IRrecv irrecv(RECV_PIN);
 decode_results results;
 byte pin_rows[ROW_NUM]      = {32, 18 , 5, 25};
 byte pin_column[COLUMN_NUM] = {16, 4, 0, 2};
-int pressA,pressB,counter_var,pressStar,square,saved,startTimer,lastPress,lastUpdate =0 ;
+int pressA,pressB,pressD,counter_var,pressStar,square,saved,startTimer,lastPress,lastUpdate =0 ;
 int start_hour,start_minute,start_second,end_hour,end_minutes_end_second = 0;
 int pressed = -1;
 WiFiClient  clientt;
@@ -158,7 +167,7 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
   irrecv.enableIRIn();
   irrecv.blink13(true);
 }
-void loop() { 
+void loop() {  
 char key = keypad.getKey();  
 if(key){
   display.ssd1306_command(SSD1306_DISPLAYON);
@@ -179,7 +188,7 @@ if(key == 'C'){
     pressA = 1;
     key = '?';
     }}   
-if(key=='A' and pressA!=1) {
+if(key=='A' and pressA!=1 and pressD!=1) {
   int lastSquare = square;
   display.clearDisplay();
   print_label(square);
@@ -195,59 +204,28 @@ edit_key(key);
 if(key_num != -48){
     chosen = key_num-1;
   }} 
-if(pressA!=1){
-    main_screen(chosen,hor,minu,sec,key,new_hor,new_minu,new_sec,irkey);
+ if(key=='D' and pressD!=1 and pressA!=1) {
+ display.clearDisplay();
+cf_div_screen("Div 3","12/june 05:02" , "rating: 837 || 5 left" , hor , minu , sec);
+display.display();
+pressD=1;
+ } 
+else if(key=='D' and pressD==1){
+display.clearDisplay();
+display.display();
+pressD=0;
+
+} 
+if(pressA!=1 and pressD!=1){
+    main_screen(chosen,hor,minu,sec,key,new_hor,new_minu,new_sec);
    drawer();  
  }
-
-
- if (irrecv.decode(&results)){
-        irkey = String(results.value, HEX); 
-       // Serial.println(irkey);
-        //Serial.println(results.value, HEX);
-        irrecv.resume();
-  } 
-  if(irkey == irCode[0][0]){
-    irkey = "";
-    if(startTimer == 1){
-      resume_tone(27);
-    }
-    else{
-      pause_tone(27);
-    }
-   }
-   else if(irkey == irCode[1][0]){
-     irkey = "";
-     pause_tone(27);
-     //startTimer = 2;
-     pressStar=1;
-     counter_var=2;
-   }
-   else if(irkey == irCode[2][0]){
-     irkey = "";
-     resume_tone(27);
-    // startTimer = 1;
-    pressStar=0;
-    counter_var=1;
-   }
-
+get_ir_data();
 
 
 
 display.display();
 }
-
-
-
-/*
-if(irkey == irCode[0][0]){
-    begin_millis = millis();
-    digitalWrite(19,HIGH);}
-    if(millis() >= begin_millis+1000){
-      digitalWrite(19,LOW);
-    }
-*/
-
 
 
 
@@ -355,11 +333,13 @@ void main_screen(int chosen,int hor,int minu,int sec,char key,String new_hor,Str
  String ampm;
  if(WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){ 
   if(lastUpdate+120000<millis()){
+    cf_data();
  timeClient.update();
  lastUpdate = millis();
 
  }
  else if(millis()<10000){
+   cf_data();
   timeClient.update();
   }}
  formattedDate = timeClient.getFormattedDate();
@@ -605,6 +585,87 @@ void pause_tone(int ledPin){
   }  
 
   void get_ir_data(){
+if (irrecv.decode(&results)){
+        irkey = String(results.value, HEX); 
+       // Serial.println(irkey);
+        //Serial.println(results.value, HEX);
+        irrecv.resume();
+  } 
+  if(irkey == irCode[0][0]){
+    irkey = "";
+    if(startTimer == 1){
+      resume_tone(27);
+    }
+    else{
+      pause_tone(27);
+    }
+   }
+   else if(irkey == irCode[1][0]){
+     irkey = "";
+     pause_tone(27);
+     //startTimer = 2;
+     pressStar=1;
+     counter_var=2;
+   }
+   else if(irkey == irCode[2][0]){
+     irkey = "";
+     resume_tone(27);
+    // startTimer = 1;
+    pressStar=0;
+    counter_var=1;
+   }
 
-    
   }
+
+void cf_div_screen(String upcoming,String contest_date,String ratingAndProblems , int hor , int minu , int sec){
+display.setCursor(30,1);
+display.setTextSize(2);
+display.print(upcoming);
+display.setTextSize(1);
+display.setCursor(20,20);
+display.print(contest_date);
+display.setTextSize(2);
+display.setCursor(10,35);
+display.print("00:00:--");
+display.setTextSize(1);
+display.setCursor(0,56);
+display.print("rating: 837 || x left");
+}  
+
+void cf_data(){
+      HTTPClient httpc;
+      // Send HTTP GET request
+      httpc.useHTTP10(true);
+      httpc.begin(serverName);
+      int httpResponseCode = httpc.GET();
+      Serial.println(httpResponseCode);
+      if (httpResponseCode>0) {
+        Serial.println("cf started 4");
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+        StaticJsonDocument<512> filter;
+        filter["result"][0]["phase"] = true;
+        filter["result"][0]["name"] = true;
+        filter["result"][0]["startTimeSeconds"] = true;
+        DynamicJsonDocument doc(1024);
+        deserializeJson(doc, httpc.getStream() , DeserializationOption::Filter(filter));
+        for(int i=0 ; i<9 ; i++){
+        String s = doc["result"][i]["name"].as<String>();
+        s = s.substring( int(s.length()) - 7, int(s.length())-1);
+        ContestDiv[i] = s;
+        ContestPhase[i] = doc["result"][i]["phase"].as<String>();
+        ContestTime[i] = doc["result"][i]["startTimeSeconds"].as<int>();
+        }}
+      // Free resources
+      httpc.end();
+  for(int i = 0 ; i<9 ; i++){
+   Serial.print(ContestDiv[i]);
+   Serial.print(" ");
+   Serial.print(ContestPhase[i]);
+   Serial.print(" ");
+   Serial.print(ContestTime[i]);
+   Serial.println();
+  }
+    
+
+}
