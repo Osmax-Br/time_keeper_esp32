@@ -1,4 +1,3 @@
-
 #include "ESPAsyncWebServer.h"
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
@@ -39,24 +38,26 @@
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+// local ip config for lan server
 IPAddress local_IP(192, 168, 1, 199); //192.168.1.199
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 IPAddress primaryDNS(8, 8, 8, 8);   //optional
 IPAddress secondaryDNS(8, 8, 4, 4); //optional
 AsyncWebServer server(80);
-
-// Replaces placeholder with DHT values
-String serverName = "http://codeforces.com/api/contest.list";
-unsigned long lastTime_cf = 0;
+String serverName = "http://codeforces.com/api/contest.list"; //cf contest list api
+unsigned long lastTime_cf = 0 ; //last time cf lists was updated
+int cf_updated,ntp_updated = 0;  // 0 not updated since startup otherwise it is updated
+int array_item_uni = 1;
 int temp_cf[11];
+// cf data lists where we store cf data
 int ContestTime [9] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
-String ContestDiv [9] = {"div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1"};
+String ContestDiv [9] = {"Div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1"};
 String ContestPhase [9] = {"na","na","na","na","na","na","na","na","na"};
-String irkey = "";
-String irCode[4][2] = {{"202b04f","status"},{"2026897","pause"},{"202e817","resume"},{"20250af","upload"}};
-int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}};
-const int activities = 4;
+String irkey = ""; // stores ir value
+String irCode[4][2] = {{"202b04f","status"},{"2026897","pause"},{"202e817","resume"},{"20250af","upload"}}; // ir value and its functionality
+int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; // to show labels correctly when A is pressed
+const int activities = 4; // number of pages when A is pressed
 String str[activities][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
 {"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec","Nothing"},
 {"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/","Nothing"},
@@ -92,7 +93,7 @@ IRrecv irrecv(RECV_PIN);
 decode_results results;
 byte pin_rows[ROW_NUM]      = {32, 18 , 5, 25};
 byte pin_column[COLUMN_NUM] = {16, 4, 0, 2};
-int pressA,pressB,pressD,counter_var,pressStar,square,saved,startTimer,lastPress,lastUpdate =0 ;
+int pressA,pressB,pressD,counter_var,pressStar,square,saved,startTimer,lastPress,lastUpdate,cf_square =0 ;
 int start_hour,start_minute,start_second,end_hour,end_minutes_end_second = 0;
 int pressed = -1;
 WiFiClient  clientt;
@@ -207,7 +208,7 @@ void web_server(){
 
 
 
-
+// draws a line
 void drawer(){
   display.drawLine(0, 10, display.width() - 1, 10, WHITE);  
   }
@@ -215,7 +216,7 @@ void drawer(){
 
 
         
-
+//draws the grid when A is pressed
 void draw_grid() {
   display.drawLine(0, 0, 0, display.height() - 1, WHITE);
   display.drawLine(41, 0, 41, display.height() - 1, WHITE);
@@ -371,27 +372,44 @@ void cf_data(){
       httpc.useHTTP10(true);
       httpc.begin(serverName);
       int httpResponseCode = httpc.GET();
-      Serial.println(httpResponseCode);
+     // Serial.println(httpResponseCode);
       if (httpResponseCode>0) {
-        Serial.println("cf started 4");
-        Serial.print("HTTP Response code: ");
-        Serial.println(httpResponseCode);
+        digitalWrite(19,HIGH);
+        //Serial.println("cf started 4");
+        //Serial.print("HTTP Response code: ");
+        //Serial.println(httpResponseCode);
         StaticJsonDocument<512> filter;
         filter["result"][0]["phase"] = true;
         filter["result"][0]["name"] = true;
         filter["result"][0]["startTimeSeconds"] = true;
         DynamicJsonDocument doc(1024);
         deserializeJson(doc, httpc.getStream() , DeserializationOption::Filter(filter));
+        int doc_item,array_item = 0;
         for(int i=0 ; i<9 ; i++){
-        String s = doc["result"][i]["name"].as<String>();
+        String s = doc["result"][doc_item]["name"].as<String>();
         s = s.substring( int(s.length()) - 7, int(s.length())-1);
-        ContestDiv[i] = s;
-        ContestPhase[i] = doc["result"][i]["phase"].as<String>();
-        ContestTime[i] = doc["result"][i]["startTimeSeconds"].as<int>();
-        }}
+        if(s == "Div. 2" || s == "Div. 3" || s == "Div. 4"){
+        String s = doc["result"][doc_item]["name"].as<String>();
+        s = s.substring( int(s.length()) - 7, int(s.length())-1);
+        ContestDiv[array_item] = s;
+        ContestPhase[array_item] = doc["result"][doc_item]["phase"].as<String>();
+        ContestTime[array_item] = doc["result"][doc_item]["startTimeSeconds"].as<int>();
+        doc_item++;
+        array_item++;
+        }
+        else{
+          doc_item++; 
+        }
+        if(doc_item == 8 || array_item == 8){
+         break;
+        }
+        }
+        array_item_uni = array_item;
+        }
       // Free resources
       httpc.end();
-  }
+      digitalWrite(19,LOW);
+      }
 
 void main_screen(int chosen,int hor,int minu,int sec,char key,String new_hor,String new_minu,String new_sec){
  display.clearDisplay();
@@ -476,7 +494,8 @@ if(counter_var==0){
     
     if(x == 200){
        display.println("saved!"); 
-       delay(500);}
+       //delay(500);
+       }
     else{
       
     }}
@@ -486,7 +505,7 @@ if(counter_var==0){
       sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,new_hor,new_minu,new_sec,hours,minutes,seconds);
       saved_data[saving]=datum;
       display.print("saved to var");
-      delay(500);
+      //delay(500);
       }}
       lastTime = millis();
      pressed = -1;
@@ -533,12 +552,19 @@ else if(counter_var==2){
  cf_data();
  lastUpdate = millis();
  }
- else if(millis()<120000){
+ else if(millis()<60000 && ntp_updated == 0){
   timeClient.update();
-  if(millis() > 60000){
-  cf_data();}
+  if(year != "1970"){
+  ntp_updated = 1 ;}
   }
-  }}
+
+  if(millis() > 60000 && cf_updated == 0){
+  cf_data();
+  if(ContestDiv[0] != "Div -1"){
+  cf_updated = 1;}
+  }
+  }
+  }
 
 
 
@@ -640,17 +666,33 @@ if(lastPress+30000<millis()){
   display.ssd1306_command(SSD1306_DISPLAYOFF);
   } 
 if(key == 'C'){
+  if(pressD != 1){
   if(square==activities-1){
       square = 0;}
   else{
     square+=1;
-    }
+    }}
     if(pressA == 1){
      display.clearDisplay();
     print_label(square);
     pressA = 1;
     key = '?';
-    }}   
+    }
+    if(pressD == 1){
+    if(cf_square== array_item_uni-1){
+      cf_square = 0;
+    }
+    else{
+      cf_square +=1;
+    }
+     display.clearDisplay();
+    cf_div_screen(ContestDiv[cf_square],"15 may 20:83","rating: 837 || 5 left" , hor , minu , sec);
+    display.display();
+    pressD = 1;
+    
+    }
+    
+    }   
 if(key=='A' and pressA!=1 and pressD!=1) {
   int lastSquare = square;
   display.clearDisplay();
@@ -669,8 +711,13 @@ if(key_num != -48){
   }} 
  if(key=='D' and pressD!=1 and pressA!=1) {
  display.clearDisplay();
-cf_div_screen("Div 3","12/june 05:02" , "rating: 837 || 5 left" , hor , minu , sec);
+cf_div_screen(ContestDiv[cf_square],"15 may 20:83","rating: 837 || 5 left" , hor , minu , sec);
 display.display();
+if(WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){
+ if(cf_updated == 0){
+  cf_data();
+  cf_updated = 1;
+  }}
 pressD=1;
  } 
 else if(key=='D' and pressD==1){
