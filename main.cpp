@@ -1,18 +1,18 @@
+
 #include "ESPAsyncWebServer.h"
 #include <ArduinoJson.h>
-#include <TimeLib.h>
 #include <HTTPClient.h>
 #include <Arduino.h>
-#include <ETH.h>
+//#include <ETH.h>
 #include <WiFi.h>
-#include <WiFiAP.h>
+//#include <WiFiAP.h>
 #include <WiFiClient.h>
-#include <WiFiGeneric.h>
-#include <WiFiMulti.h>
-#include <WiFiScan.h>
+//#include <WiFiGeneric.h>
+//#include <WiFiMulti.h>
+//#include <WiFiScan.h>
 #include <WiFiServer.h>
-#include <WiFiSTA.h>
-#include <WiFiType.h>
+//#include <WiFiSTA.h>
+//#include <WiFiType.h>
 #include <WiFiUdp.h>
 #include <Keypad.h>
 #include <NTPClient.h>
@@ -23,13 +23,13 @@
 #include <Adafruit_SSD1306.h>
 #include "ThingSpeak.h"
 #include "html.h" 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sqlite3.h>
+//#include <stdio.h>
+//#include <stdlib.h>
+//#include <sqlite3.h>
 #include <SPI.h>
-#include <FS.h>
-#include "SD.h"
-#include "sd_card_core.h"
+//#include <FS.h>
+//#include "SD.h"
+//#include "sd_card_core.h"
 #include <IRremote.h>
 #define SD_CS 23
 #define SD_SCK 17
@@ -39,36 +39,34 @@
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-// local ip config for lan server
 IPAddress local_IP(192, 168, 1, 199); //192.168.1.199
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 IPAddress primaryDNS(8, 8, 8, 8);   //optional
 IPAddress secondaryDNS(8, 8, 4, 4); //optional
 AsyncWebServer server(80);
-String serverName = "http://codeforces.com/api/contest.list"; //cf contest list api
-unsigned long lastTime_cf,last_led = 0 ; //last time cf lists was updated
-int cf_updated,ntp_updated,led_begin = 0;  // 0 not updated since startup otherwise it is updated
-int array_item_uni = 1;
+
+// Replaces placeholder with DHT values
+String serverName = "http://codeforces.com/api/contest.list";
+unsigned long lastTime_cf = 0;
 int temp_cf[11];
-// cf data lists where we store cf data
 int ContestTime [9] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
-String ContestDiv [9] = {"Div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1"};
+String ContestDiv [9] = {"div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1"};
 String ContestPhase [9] = {"na","na","na","na","na","na","na","na","na"};
-String irkey = ""; // stores ir value
-String irCode[4][2] = {{"f20d4040","status"},{"e9164040","pause"},{"e8174040","resume"},{"f50a4040","upload"}}; // ir value and its functionality
-int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; // to show labels correctly when A is pressed
-const int activities = 4; // number of pages when A is pressed
+String irkey = "";
+String irCode[4][2] = {{"202b04f","status"},{"2026897","pause"},{"202e817","resume"},{"20250af","upload"}};
+int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}};
+const int activities = 4;
 String str[activities][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
 {"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec","Nothing"},
 {"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/","Nothing"},
 {"/","/","/","/","/","/","/","/","/","/","/","/","Nothing"}};
 const long utcOffsetInSeconds = 7200+3600;
 int hours=0;
-String day_var = "???";
+String day = "???";
 int minutes = 0;
 int seconds = 0;
-String year_var = "0000";
+String year = "0000";
 String dayStamp = "00-00";
 char amPm;
 char daysOfTheWeek[7][12] = {"Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat"};
@@ -90,19 +88,18 @@ char keys[ROW_NUM][COLUMN_NUM] = {
 unsigned long myChannelNumber = 1;
 const char * myWriteAPIKey = "1B8PQM7MAYAT0WIO";
 const int RECV_PIN = 15;
-//IrReceiver IrReceiver(RECV_PIN);
-
-//decode_results results;
+IRrecv irrecv(RECV_PIN);
+decode_results results;
 byte pin_rows[ROW_NUM]      = {32, 18 , 5, 25};
 byte pin_column[COLUMN_NUM] = {16, 4, 0, 2};
-int pressA,pressB,pressD,counter_var,pressStar,square,saved,startTimer,lastPress,lastUpdate,cf_square,cf_tries =0 ;
+int pressA,pressB,pressD,counter_var,pressStar,square,saved,startTimer,lastPress,lastUpdate =0 ;
 int start_hour,start_minute,start_second,end_hour,end_minutes_end_second = 0;
 int pressed = -1;
 WiFiClient  clientt;
 Keypad keypad = Keypad( makeKeymap(keys), pin_rows, pin_column, ROW_NUM, COLUMN_NUM );
 String wrd;
 hw_timer_t * timer = NULL;
-long sec_var,minu,hor;
+long sec,minu,hor;
 unsigned long lastTime = 0;
 unsigned long timerDelay = 30000;
 String new_sec,new_minu,new_hor = "00";
@@ -210,7 +207,7 @@ void web_server(){
 
 
 
-// draws a line
+
 void drawer(){
   display.drawLine(0, 10, display.width() - 1, 10, WHITE);  
   }
@@ -218,7 +215,7 @@ void drawer(){
 
 
         
-//draws the grid when A is pressed
+
 void draw_grid() {
   display.drawLine(0, 0, 0, display.height() - 1, WHITE);
   display.drawLine(41, 0, 41, display.height() - 1, WHITE);
@@ -282,12 +279,12 @@ else{
 }
 
 
-void beautiful_int(int sec_var,int hor,int minu){
-  if(sec_var<10){
-    new_sec = "0" + String(sec_var);
+void beautiful_int(int sec,int hor,int minu){
+  if(sec<10){
+    new_sec = "0" + String(sec);
     }
   else{
-    new_sec = String(sec_var);
+    new_sec = String(sec);
     }  
   if(minu<10){
     new_minu = "0" + String(minu);
@@ -336,11 +333,11 @@ void pause_tone(int ledPin){
   }  
 
   void get_ir_data(){
-if (IrReceiver.decode()){
-        irkey = String(IrReceiver.decodedIRData.decodedRawData , HEX); 
-       //Serial.println(irkey);
+if (irrecv.decode(&results)){
+        irkey = String(results.value, HEX); 
+       // Serial.println(irkey);
         //Serial.println(results.value, HEX);
-        IrReceiver.resume();
+        irrecv.resume();
   } 
   if(irkey == irCode[0][0]){
     irkey = "";
@@ -369,67 +366,36 @@ if (IrReceiver.decode()){
   }
 
 void cf_data(){
+  /*
       HTTPClient httpc;
       // Send HTTP GET request
       httpc.useHTTP10(true);
       httpc.begin(serverName);
       int httpResponseCode = httpc.GET();
-     // Serial.println(httpResponseCode);
+      Serial.println(httpResponseCode);
       if (httpResponseCode>0) {
-        digitalWrite(19,HIGH);
-        //Serial.println("cf started 4");
-        //Serial.print("HTTP Response code: ");
-        //Serial.println(httpResponseCode);
+        Serial.println("cf started 4");
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
         StaticJsonDocument<512> filter;
         filter["result"][0]["phase"] = true;
         filter["result"][0]["name"] = true;
         filter["result"][0]["startTimeSeconds"] = true;
         DynamicJsonDocument doc(1024);
         deserializeJson(doc, httpc.getStream() , DeserializationOption::Filter(filter));
-        int doc_item = 0;
-        int array_item = 0;
         for(int i=0 ; i<9 ; i++){
-        String s = doc["result"][doc_item]["name"].as<String>();
+        String s = doc["result"][i]["name"].as<String>();
         s = s.substring( int(s.length()) - 7, int(s.length())-1);
-        if(s == "Div. 2" || s == "Div. 3" || s == "Div. 4"){
-        String s = doc["result"][doc_item]["name"].as<String>();
-        s = s.substring( int(s.length()) - 7, int(s.length())-1);
-        ContestDiv[array_item] = s;
-        ContestPhase[array_item] = doc["result"][doc_item]["phase"].as<String>();
-        ContestTime[array_item] = doc["result"][doc_item]["startTimeSeconds"].as<int>();
-        doc_item++;
-        array_item++;
-        }
-        else{
-          doc_item++; 
-        }
-        if(doc_item == 8 || array_item == 8){
-         break;
-        }
-        }
-        array_item_uni = array_item;
-        String tempdiv;
-        int temptime;
-        String tempphase;
-       for(int i = 0; i<array_item/2; i++){
-        tempdiv = ContestDiv[i];
-        ContestDiv[i] = ContestDiv[array_item-i-1];
-        ContestDiv[array_item-i-1] = tempdiv;
-        temptime = ContestTime[i];
-        ContestTime[i] = ContestTime[array_item-i-1];
-        ContestTime[array_item-i-1] = temptime;
-        tempphase = ContestPhase[i];
-        ContestPhase[i] = ContestPhase[array_item-i-1];
-        ContestPhase[array_item-i-1] = tempphase;
-    }
-      
-        }
+        ContestDiv[i] = s;
+        ContestPhase[i] = doc["result"][i]["phase"].as<String>();
+        ContestTime[i] = doc["result"][i]["startTimeSeconds"].as<int>();
+        }}
       // Free resources
       httpc.end();
-      digitalWrite(19,LOW);
-      }
+      */
+  }
 
-void main_screen(int chosen,int hor,int minu,int sec_var,char key,String new_hor,String new_minu,String new_sec){
+void main_screen(int chosen,int hor,int minu,int sec,char key,String new_hor,String new_minu,String new_sec){
  display.clearDisplay();
    display.setCursor(0,40+15);
   display.setTextSize(1);
@@ -445,19 +411,19 @@ void main_screen(int chosen,int hor,int minu,int sec_var,char key,String new_hor
  int splitT = formattedDate.indexOf("T");
  dayStamp = formattedDate.substring(5, splitT);
  hours=timeClient.getHours();
- day_var = daysOfTheWeek[timeClient.getDay()];
+ day = daysOfTheWeek[timeClient.getDay()];
  minutes = timeClient.getMinutes();
  seconds = timeClient.getSeconds();
- year_var = formattedDate.substring(0,4);
+ year = formattedDate.substring(0,4);
  if(hours>12){
   hours-=12;
   ampm = "Pm";}
  else{
  ampm = "Am";
  }
- if(year_var == "1970"){
+ if(year == "1970"){
   hours = minutes = seconds = 0;
-  day_var = "???";
+  day = "???";
   dayStamp = "0-0";
   }
 
@@ -512,8 +478,7 @@ if(counter_var==0){
     
     if(x == 200){
        display.println("saved!"); 
-       //delay(500);
-       }
+       delay(500);}
     else{
       
     }}
@@ -523,7 +488,7 @@ if(counter_var==0){
       sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,new_hor,new_minu,new_sec,hours,minutes,seconds);
       saved_data[saving]=datum;
       display.print("saved to var");
-      //delay(500);
+      delay(500);
       }}
       lastTime = millis();
      pressed = -1;
@@ -546,7 +511,7 @@ else if(counter_var==2){
  display.setTextSize(1);
  display.setCursor(0,20+15);
  char buffer[40];
- sprintf(buffer,"%i:%i:%i %s %s %s",hours,minutes,seconds,ampm,day_var,dayStamp);
+ sprintf(buffer,"%i:%i:%i %s %s %s",hours,minutes,seconds,ampm,day,dayStamp);
  display.print(buffer);
  int savings = saving;
  if(saving>-1 and WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){
@@ -570,59 +535,26 @@ else if(counter_var==2){
  cf_data();
  lastUpdate = millis();
  }
- else if(millis()<60000 && ntp_updated == 0){
+ else if(millis()<120000){
   timeClient.update();
-  if(year_var != "1970"){
-  ntp_updated = 1 ;}
+  if(millis() > 60000){
+  cf_data();}
   }
-
-  if(millis() > 60000 && cf_updated == 0 && cf_tries < 10){
-  cf_data();
-  if(ContestDiv[0] != "Div -1"){
-  cf_updated = 1;}
-  cf_tries++;
-  }
-
-  }
-  }
+  }}
 
 
 
 
-void cf_div_screen(String upcoming,int contest_date,String ratingAndProblems ,int hor , int minu , int sec_var){
-
-char buff_date[32];
-sprintf(buff_date, "%02d/%02d %02d:%02d", day(contest_date), month(contest_date) , hour(contest_date) ,minute(contest_date));//, year(t), hour(t), minute(t), second(t));
-char buff_time[32];
-if(contest_date!=-1){
-int cf_relative = contest_date - timeClient.getEpochTime();
-int days_cf = (cf_relative/86400) ;
-int hours_cf = (cf_relative - (days_cf*86400)) / 3600 ;
-if(hours_cf > 12){
-  hours_cf = hours_cf - 12;
-}
-int minutes_cf = (cf_relative - (days_cf*86400) - (hours_cf*3600))/60 ;
-//int seconds_cf = (cf_relative - (days_cf*86400) - (hours_cf*3600) - (minutes_cf*60))/60 ;
-if(days_cf<99 && days_cf > 0){
-sprintf(buff_time, "%02d - %02d:%02d", days_cf, hours_cf ,minutes_cf );}
-else{
-sprintf(buff_time, "00 - 00:00");
-}
-}
-else{
-  
-sprintf(buff_time, "00 - 00:00");
-}
-
+void cf_div_screen(String upcoming,String contest_date,String ratingAndProblems , int hor , int minu , int sec){
 display.setCursor(30,1);
 display.setTextSize(2);
 display.print(upcoming);
 display.setTextSize(1);
-display.setCursor(25,20);
-display.print(buff_date);
+display.setCursor(20,20);
+display.print(contest_date);
 display.setTextSize(2);
-display.setCursor(0,35);
-display.print(buff_time);
+display.setCursor(10,35);
+display.print("00:00:--");
 display.setTextSize(1);
 display.setCursor(0,56);
 display.print("rating: 837 || x left");
@@ -635,9 +567,9 @@ display.print("rating: 837 || x left");
 
 void IRAM_ATTR onTimer(){
   if(startTimer == 1){
-  sec_var+=1;
-  if(sec_var>=59){
-    sec_var=0;
+  sec+=1;
+  if(sec>=59){
+    sec=0;
     minu++;
     }
   if(minu>=59){
@@ -645,11 +577,11 @@ void IRAM_ATTR onTimer(){
     hor++;
     } }
    else if(startTimer ==0){
-   sec_var = 0;
+   sec = 0;
    hor =0;
    minu = 0;
    } 
-   beautiful_int(sec_var,hor,minu);
+   beautiful_int(sec,hor,minu);
  } 
 
 
@@ -697,10 +629,8 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
   web_server();
   pinMode(19,OUTPUT); 
   pinMode(27,OUTPUT);  
-  //IrReceiver.enableIRIn();
-  
-  IrReceiver.begin(RECV_PIN , ENABLE_LED_FEEDBACK);
-  //IrReceiver.blink13(true);
+  irrecv.enableIRIn();
+  irrecv.blink13(true);
 }
 void loop() { 
 char key = keypad.getKey();  
@@ -712,35 +642,19 @@ if(lastPress+30000<millis()){
   display.ssd1306_command(SSD1306_DISPLAYOFF);
   } 
 if(key == 'C'){
-  if(pressD != 1){
   if(square==activities-1){
       square = 0;}
   else{
     square+=1;
-    }}
+    }
     if(pressA == 1){
      display.clearDisplay();
     print_label(square);
     pressA = 1;
     key = '?';
-    }
-    if(pressD == 1){
-    if(cf_square== array_item_uni-1){
-      cf_square = 0;
-    }
-    else{
-      cf_square +=1;
-    }
-     display.clearDisplay();
-    cf_div_screen(ContestDiv[cf_square],ContestTime[cf_square],"rating: 837 || 5 left" , hor , minu , sec_var);
-    display.display();
-    pressD = 1;
-    
-    }
-    
-    }   
+    }}   
 if(key=='A' and pressA!=1 and pressD!=1) {
-  //int lastSquare = square;
+  int lastSquare = square;
   display.clearDisplay();
   print_label(square);
   pressA=1;
@@ -757,13 +671,8 @@ if(key_num != -48){
   }} 
  if(key=='D' and pressD!=1 and pressA!=1) {
  display.clearDisplay();
-cf_div_screen(ContestDiv[cf_square],ContestTime[cf_square],"rating: 837 || 5 left" , hor , minu , sec_var);
+cf_div_screen("Div 3","12/june 05:02" , "rating: 837 || 5 left" , hor , minu , sec);
 display.display();
-if(WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){
- if(cf_updated == 0){
-  cf_data();
-  cf_updated = 1;
-  }}
 pressD=1;
  } 
 else if(key=='D' and pressD==1){
@@ -773,24 +682,12 @@ pressD=0;
 
 } 
 if(pressA!=1 and pressD!=1){
-    main_screen(chosen,hor,minu,sec_var,key,new_hor,new_minu,new_sec);
+    main_screen(chosen,hor,minu,sec,key,new_hor,new_minu,new_sec);
    drawer();  
  }
 get_ir_data();
-if(millis() > last_led +3000 || irkey == "f50a4040"){
-int ldr_value = analogRead(34);
-last_led=millis();
-if((ldr_value<700 && chosen_var() != "sleep") || irkey == "f50a4040"){
-  led_begin = millis();
-  digitalWrite(19,HIGH);
-}
-if(millis() - 7000 > led_begin || ldr_value>1000){
-  if(irkey != "f50a4040"){
-digitalWrite(19,LOW);}
 
-}
 
-}
 
 display.display();
 }
