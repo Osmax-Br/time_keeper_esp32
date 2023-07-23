@@ -21,17 +21,17 @@
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-int p = 0;
 //ui vars
 int filled_rect = -1 ; //for inverting text
-int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; 
+int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
 const int pages = 4; // ui pages number
 String str[pages][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
 {"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec","Nothing"},
 {"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/","Nothing"},
 {"/","/","/","/","/","/","/","/","/","/","/","/","Nothing"}};
-int rect_cord[12][4] = {{0,0,43,18},{42,0,43,18},{84,0,43,18},{0,17,43,18},{42,17,43,18},{84,17,43,18},{0,33,43,17},{42,33,43,17},{84,33,43,17},{0,49,43,15},{42,49,43,15},{84,49,43,15}};
-int lastpress,press_state = 0;
+int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},{42,17,43,18},{84,17,43,18}},{{0,33,43,17},{42,33,43,17},{84,33,43,17}},{{0,49,43,15},{42,49,43,15},{84,49,43,15}}};  //the data of each rectangular in the grid eg: width,height,x,y
+int lastpress,press_state = 0; //for button class
+int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
 
 //making button clases , each button is a spereate object
 button_press button_up(35);
@@ -45,47 +45,30 @@ int up_bounce,down_bounce,righ_bounce,left_bounce,selecT_bounce = 0;  // stores 
 
 
 
-void draw_grid(){
-  for(int i = 0 ; i<12 ; i++){
-    display.drawRect(rect_cord[i][0],rect_cord[i][1],rect_cord[i][2],rect_cord[i][3], WHITE);
-  }
-  
-  
-  
-  /*
-display.drawRect(0,0,43,18, WHITE);
-display.drawRect(42,0,43,18, WHITE);
-display.drawRect(84,0,43,18, WHITE);
-//////////////////////////////////
-display.drawRect(0,17,43,18, WHITE);
-display.drawRect(42,17,43,18, WHITE);
-display.drawRect(84,17,43,18, WHITE);
-/////////////////////////////////
-display.drawRect(0,33,43,17, WHITE);
-display.drawRect(42,33,43,17, WHITE);
-display.drawRect(84,33,43,17, WHITE);
-///////////////////////////////
-display.drawRect(0,49,43,15, WHITE);
-display.drawRect(42,49,43,15, WHITE);
-display.drawRect(84,49,43,15, WHITE);*/
+void draw_grid(){ //used this method for easier tex inverting 
+  for(int i = 0 ; i<4 ; i++){
+    for(int j=0 ; j<3 ; j++){
+    display.drawRect(rect_cord[i][j][0],rect_cord[i][j][1],rect_cord[i][j][2],rect_cord[i][j][3], WHITE);
+  }}
 }
 
 
 
 
-void print_label(int current_page,int filled_rect) { //printing the activity inside its box in the grid
+void print_label(int current_page,int filled_rect_x , int filled_rect_y) { //printing the activity inside its box in the grid
+  draw_grid();
   display.setTextSize(1);
-  int i2=0;
+  int i2=0; //this is to adjust the y shift while printing labels
   for(int i=0;i<12;i++){  
-  int x = table[i][0];
+  int x = table[i][0]; // getting the coordintaes of each rectangular
   int y = table[i][1];  
   if(i==9){
-    i2 = -2;
+    i2 = -2;  //adjusting y shift
   }
-  display.setCursor(4 + 41 * x,3 + (17 * y) +i2);
-  if(i == filled_rect && filled_rect != -1){
+  display.setCursor(4 + 41 * x,3 + (17 * y) +i2); //setting writing cursor
+  if(x == filled_rect_x && y==filled_rect_y && selecT_bounce == 1){   //this is for inverting the text color while selecting
   display.setTextColor(BLACK);
-  display.print(str[current_page][i]);}
+  display.print(str[current_page][i]);} //printing the labels
   else{
  display.setTextColor(WHITE);
   display.print(str[current_page][i]);
@@ -94,16 +77,41 @@ void print_label(int current_page,int filled_rect) { //printing the activity ins
 }
 
 void grid_navigiation(){
+    
+    int x = cursor[1]; // getting current cursor coordintes
+    int y = cursor[0];
+  if(right == "pressed"){
+    if(cursor[0] + 1 != 3){ //this is for checking the the cursor doesnt go out of the screen (stops at the edges)
+    cursor[0] = cursor[0] + 1; // adjusting x cursor
+    display.clearDisplay(); // clearing display for interferance
+  }}
+
+   if(left == "pressed"){
+    if(cursor[0] -1  != -1){
+    cursor[0] = cursor[0] - 1; 
+    display.clearDisplay();
+  }} 
+   if(up == "pressed"){
+    if(cursor[1] -1  != -1){
+    cursor[1] = cursor[1] - 1; 
+    display.clearDisplay();
+  }} 
+   if(down == "pressed"){
+    if(cursor[1] +1  != 4){
+    cursor[1] = cursor[1] + 1 ; 
+    display.clearDisplay();
+  }} 
+  
+  
   if(selecT_bounce == 1){
-    display.fillRect(0,0,43,18, WHITE);
-    filled_rect = 0 ;
+    display.clearDisplay();
+    display.fillRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], WHITE); //making the rectangular white
   }
   else if(selecT_bounce == 0){
-    display.fillRect(0,0,43,18, BLACK);
-    display.drawRect(0,0,43,18, WHITE);
-     filled_rect = -1 ;
+    display.fillRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], BLACK);
+    display.drawRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], WHITE); //making the rectangualr normal again
   }
-print_label(0,filled_rect);
+print_label(0,cursor[0],cursor[1]); // printing the lables
 }
 
 
@@ -127,34 +135,15 @@ right = button_right.press();
 left = button_left.press();
 selecT = button_selecT.press(); // the name is with "T" not "t" due to interferance with another library :p
 // adding the values of bounce press vars
-selecT_bounce = button_selecT.bounce_press();
+selecT_bounce = button_selecT.bounce_press(); 
 
-draw_grid();
-if(selecT_bounce == 1){
-    display.fillRect(0,0,43,18, WHITE);
-    filled_rect = 0 ;
-  }
-  else if(selecT_bounce == 0){
-    display.fillRect(0,0,43,18, BLACK);
-    display.drawRect(0,0,43,18, WHITE);
-     filled_rect = -1 ;
-  }
-print_label(0,filled_rect);
-
-
-Serial.print(button_selecT.bounce_press());
+grid_navigiation(); // the grid navigiation & selectin & invertion function
 
 
 
-/*
-draw_gridd();
 
-if(selecT == 1){
-  display.fillRect(0,0,43,18, WHITE);
-  filled_rect = 0 ;
-  
-}
-print_label(0,filled_rect);*/
+
+
 display.display();
 }
  
