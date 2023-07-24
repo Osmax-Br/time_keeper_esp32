@@ -80,7 +80,7 @@ void print_label(int current_page,int filled_rect_x , int filled_rect_y) { //pri
 }
 
 void grid_navigiation(){
-    select_mode = 1 ;
+  select_mode = 1;
     int x = cursor[1]; // getting current cursor coordintes
     int y = cursor[0];
   if(right == "pressed"){
@@ -126,6 +126,7 @@ for(int i=0 ; i<12 ; i++){
   if(x1==x && y==y1){
     chosen_value = str[current_page][i]; //the Actual selected value 
     Serial.print(str[current_page][i]);
+    //select_mode = 0;
     break;
   }
 }
@@ -189,9 +190,23 @@ selecT = button_selecT.press(); // the name is with "T" not "t" due to interfera
 // adding the values of bounce press vars
 selecT_bounce = button_selecT.bounce_press(); 
 
+if(selecT == "long_pressed"){
+  if(select_mode == 1){
+    select_mode = 0;
+  }
+  else if(select_mode == 0){
+    select_mode = 1;
+  }
+}
+
+
+if (select_mode == 1){
+  select_mode = 0;
   grid_navigiation(); // the grid navigiation & selectin & invertion function
-
-
+}
+else if(select_mode == 0){
+  main_screen(chosen_value);
+}
 
 
 display.display();
