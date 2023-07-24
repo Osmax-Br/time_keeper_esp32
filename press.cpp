@@ -40,12 +40,12 @@ int button_press::bounce_press(){ // this is for changing the button value betwe
   _nowpress_bounce = digitalRead(_pin);
   if(_nowpress_bounce == HIGH){  
       if(_last_press_state == 0){
-        if(millis() > last_press_time_bounce + 100){ //ignoring multiple presses at the same time
+        if(millis() > last_press_time_bounce + 100 ){ //ignoring multiple presses at the same time
               _last_press_state = 1;    //changing value
               last_press_time_bounce = millis();  //updating last time pressed
         }
       }
-      else if(_last_press_state == 1){
+      else if(_last_press_state == 1 ){
           if(millis() > last_press_time_bounce + 100){
               _last_press_state = 0;
               last_press_time_bounce = millis();
@@ -54,7 +54,10 @@ int button_press::bounce_press(){ // this is for changing the button value betwe
 
       }
 
-  }
-  
+  } 
+ 
+
+
+ 
  return _last_press_state;
 }

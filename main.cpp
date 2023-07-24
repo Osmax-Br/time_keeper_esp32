@@ -22,9 +22,12 @@
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 //ui vars
+String chosen_value = "Nothing"; //the chosen value from the grid
+int select_mode = 0 ; //for maniging selection ways
 int filled_rect = -1 ; //for inverting text
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
 const int pages = 4; // ui pages number
+int current_page = 0; // for navigation
 String str[pages][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
 {"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec","Nothing"},
 {"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/","Nothing"},
@@ -66,7 +69,7 @@ void print_label(int current_page,int filled_rect_x , int filled_rect_y) { //pri
     i2 = -2;  //adjusting y shift
   }
   display.setCursor(4 + 41 * x,3 + (17 * y) +i2); //setting writing cursor
-  if(x == filled_rect_x && y==filled_rect_y && selecT_bounce == 1){   //this is for inverting the text color while selecting
+  if(x == filled_rect_x && y==filled_rect_y){ //&& selecT_bounce == 1){   //this is for inverting the text color while selecting
   display.setTextColor(BLACK);
   display.print(str[current_page][i]);} //printing the labels
   else{
@@ -77,7 +80,7 @@ void print_label(int current_page,int filled_rect_x , int filled_rect_y) { //pri
 }
 
 void grid_navigiation(){
-    
+    select_mode = 1 ;
     int x = cursor[1]; // getting current cursor coordintes
     int y = cursor[0];
   if(right == "pressed"){
@@ -103,16 +106,65 @@ void grid_navigiation(){
   }} 
   
   
-  if(selecT_bounce == 1){
-    display.clearDisplay();
+  //if(selecT_bounce == 1){
+    display.clearDisplay(); //without it the lables will over lap
     display.fillRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], WHITE); //making the rectangular white
+  //}
+  //else if(selecT_bounce == 0){
+   // display.clearDisplay();
+    //display.fillRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], BLACK);
+    //display.drawRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], WHITE); //making the rectangualr normal again
+ // }
+
+
+if(selecT == "pressed"){ //the action which happens when something is selected
+int x = cursor[0]; //the same code used in the function print_label
+int y = cursor[1]; //the code is mainly to change from coordinates in cusor to a number which allows us to know the value selected
+for(int i=0 ; i<12 ; i++){
+  int x1 = table[i][0];
+  int y1 = table[i][1];
+  if(x1==x && y==y1){
+    chosen_value = str[current_page][i]; //the Actual selected value 
+    Serial.print(str[current_page][i]);
+    break;
   }
-  else if(selecT_bounce == 0){
-    display.fillRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], BLACK);
-    display.drawRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], WHITE); //making the rectangualr normal again
-  }
-print_label(0,cursor[0],cursor[1]); // printing the lables
 }
+
+}
+
+if(right == "long_pressed" && current_page != 3){ //for flipping pages and ensuring that an error doesnt happen
+  current_page +=1 ;   // change page
+}
+if(left == "long_pressed" && current_page != 0){
+  current_page -= 1;
+}
+
+print_label(current_page,cursor[0],cursor[1]); // printing the lables
+}
+
+
+
+void main_screen(String chosen_value){
+  display.clearDisplay();
+  display.setCursor(0,40+15);
+  display.setTextSize(1);
+  display.print("choice: ");
+  if(chosen_value=="Nothing"){
+    display.print("Nothing");
+    }
+  else{
+    display.print(chosen_value);
+    } 
+  display.setCursor(17,0+15);
+  display.setTextSize(2);
+  display.print("00:00:00");
+  display.setTextSize(1);
+  display.setCursor(0,20+15);
+  display.print("12:34:12 AM wed 14/12");
+
+}
+
+
 
 
 
@@ -137,9 +189,7 @@ selecT = button_selecT.press(); // the name is with "T" not "t" due to interfera
 // adding the values of bounce press vars
 selecT_bounce = button_selecT.bounce_press(); 
 
-grid_navigiation(); // the grid navigiation & selectin & invertion function
-
-
+  grid_navigiation(); // the grid navigiation & selectin & invertion function
 
 
 

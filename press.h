@@ -7,6 +7,7 @@ public:
     button_press(int pin);
     String press();
     int bounce_press();
+    int press_mode();
     int last_press_time ;   //ignoring multiple presses at the same time for press function
     int last_press_time_bounce = 0 ; //ignoring multiple presses at the same time for bounce function
 private:
