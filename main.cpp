@@ -15,12 +15,13 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <SPI.h>
-
+#include <ESP32Time.h> // for using the internal rtc
 //oled screen init
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+int last_time_screen_on = 0;
 //ui vars
 String chosen_value = "Nothing"; //the chosen value from the grid
 int select_mode = 0 ; //for maniging selection ways
@@ -36,6 +37,12 @@ int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},
 int lastpress,press_state = 0; //for button class
 int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
 
+ESP32Time rtc(3600); // utc time offset , here in Syria it is 1 hour = 3600 sec
+
+//network credentials
+const char *ssid     = "lemone"; 
+const char *password = "Hta87#Mi00";
+
 //making button clases , each button is a spereate object
 button_press button_up(35);
 button_press button_down(34);
@@ -45,6 +52,15 @@ button_press button_selecT(27);
 int last_press_time = 0; // for ignoring multiple presses at the same moment
 String up,down,right,left,selecT = "" ; // strores button values
 int up_bounce,down_bounce,righ_bounce,left_bounce,selecT_bounce = 0;  // stores bounce press values
+
+
+
+
+
+
+TaskHandle_t Task1; //for having the time from ntp (runs on core 0)
+
+
 
 
 
@@ -161,12 +177,30 @@ void main_screen(String chosen_value){
   display.print("00:00:00");
   display.setTextSize(1);
   display.setCursor(0,20+15);
-  display.print("12:34:12 AM wed 14/12");
+  display.print(rtc.getTime("%I:%M:%S %p %a %d/%m")); //printing current time from the rtc
 
 }
 
 
+void screen_off(){
 
+ if(right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed"){
+  display.ssd1306_command(SSD1306_DISPLAYON);
+  last_time_screen_on = millis();
+  }  
+if(last_time_screen_on+8000<millis()){
+  display.ssd1306_command(SSD1306_DISPLAYOFF);
+  }  
+}
+
+
+ void get_ntp_time( void * pvParameters){
+  //Serial.println(xPortGetCoreID());
+}
+
+void Task1code( void * pvParameters ){
+
+}
 
 
 void setup() {
@@ -175,10 +209,23 @@ void setup() {
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE);
+  rtc.setTime(30, 24, 18, 26, 7, 2023);
+  
+xTaskCreatePinnedToCore(
+                    Task1code,   /* Task function. */
+                    "Task1",     /* name of task. */
+                    10000,       /* Stack size of task */
+                    NULL,        /* parameter of the task */
+                    1,           /* priority of the task */
+                    &Task1,      /* Task handle to keep track of created task */
+                    0);
 
 
- 
+
  }
+
+
+
 
 void loop() {
 // adding the value of each button to a seperate var
@@ -190,7 +237,7 @@ selecT = button_selecT.press(); // the name is with "T" not "t" due to interfera
 // adding the values of bounce press vars
 selecT_bounce = button_selecT.bounce_press(); 
 
-if(selecT == "long_pressed"){
+if(selecT == "long_pressed"){ //this is for entering the grid mode or main screen
   if(select_mode == 1){
     select_mode = 0;
   }
@@ -202,12 +249,14 @@ if(selecT == "long_pressed"){
 
 if (select_mode == 1){
   select_mode = 0;
-  grid_navigiation(); // the grid navigiation & selectin & invertion function
+  grid_navigiation(); // the grid navigiation & selection & invertion function
 }
 else if(select_mode == 0){
   main_screen(chosen_value);
 }
 
+   
+screen_off();
 
 display.display();
 }
