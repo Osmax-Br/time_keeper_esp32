@@ -59,15 +59,15 @@ String up,down,right,left,selecT = "" ; // strores button values
 int up_bounce,down_bounce,righ_bounce,left_bounce,selecT_bounce = 0;  // stores bounce press values
 
 
-//hw_timer_t * timer = NULL; //setting up the timer
-//volatile int seconds_passed; // storing the activity time in SRAM for faster execution
-//portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+hw_timer_t * timer = NULL; //setting up the timer
+volatile int seconds_passed; // storing the activity time in SRAM for faster execution
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
-//void IRAM_ATTR onTimer() {      //Defining Inerrupt function with IRAM_ATTR for faster access
-// portENTER_CRITICAL_ISR(&timerMux);
-// seconds_passed++;
-// portEXIT_CRITICAL_ISR(&timerMux);
-//}
+void IRAM_ATTR onTimer() {      //Defining Inerrupt function with IRAM_ATTR for faster access
+ portENTER_CRITICAL_ISR(&timerMux);
+ seconds_passed++;
+ portEXIT_CRITICAL_ISR(&timerMux);
+}
 
 
 
@@ -209,10 +209,10 @@ void setup() {
 
 
 
- // timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
-//timerAttachInterrupt(timer, &onTimer, true); 	// Attach interrupt
-  //timerAlarmWrite(timer, 1000000, true);  		// Match value= 1000000 for 1 sec. delay.
- // timerAlarmEnable(timer);           			// Enable Timer with interrupt (Alarm Enable)
+  timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
+  timerAttachInterrupt(timer, &onTimer, true); 	// Attach interrupt
+  timerAlarmWrite(timer, 1000000, true);  		// Match value= 1000000 for 1 sec. delay.
+  timerAlarmEnable(timer);           			// Enable Timer with interrupt (Alarm Enable)
 
 
   //connecting to wifi , the ip address is 192.168.1.199
@@ -268,7 +268,7 @@ else if(select_mode == 0){
 
    
 screen_off();
-//Serial.print(seconds_passed);
+Serial.print(seconds_passed);
 display.display();
 }
  
