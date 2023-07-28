@@ -60,8 +60,11 @@ int up_bounce,down_bounce,righ_bounce,left_bounce,selecT_bounce = 0;  // stores 
 
 
 hw_timer_t * timer = NULL; //setting up the timer
-volatile int seconds_passed; // storing the activity time in SRAM for faster execution
+volatile int seconds_passed; // storing the counter seconds in SRAM for faster execution
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+int minutes_passed,hours_passed = 0; //storing the counter values
+char time_counter_string[10] ;  // storing the formatted counter time
+
 
 void IRAM_ATTR onTimer() {      //Defining Inerrupt function with IRAM_ATTR for faster access
  portENTER_CRITICAL_ISR(&timerMux);
@@ -175,7 +178,7 @@ void main_screen(String chosen_value){
     } 
   display.setCursor(17,0+15);
   display.setTextSize(2);
-  display.print("00:00:00");
+  display.print(time_counter_string);
   display.setTextSize(1);
   display.setCursor(0,20+15);
  display.print(rtc.getTime("%I:%M:%S %p %a %d/%m")); //printing current time from the rtc
@@ -197,9 +200,25 @@ if(last_time_screen_on+8000<millis()){
 }
 
 
+void counter_formatting(){
+  
+if(seconds_passed == 59){
+  portENTER_CRITICAL(&timerMux);
+  seconds_passed = 0;
+  portEXIT_CRITICAL(&timerMux);
+  minutes_passed++;
+}
+if(minutes_passed == 59){
+  minutes_passed = 0;
+  hours_passed ++ ;
+}
+sprintf(time_counter_string,"%02i:%02i:%02i",hours_passed,minutes_passed,seconds_passed);
 
+}
 
 void setup() {
+  sprintf(time_counter_string,"%02i:%02i:%02i",hours_passed,minutes_passed,seconds_passed);
+
   Serial.begin(115200);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
@@ -211,7 +230,7 @@ void setup() {
 
   timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
   timerAttachInterrupt(timer, &onTimer, true); 	// Attach interrupt
-  timerAlarmWrite(timer, 1000000, true);  		// Match value= 1000000 for 1 sec. delay.
+  timerAlarmWrite(timer,1000000, true);  		// Match value= 1000000 for 1 sec. delay.
   timerAlarmEnable(timer);           			// Enable Timer with interrupt (Alarm Enable)
 
 
@@ -239,6 +258,7 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {  // ens
 
 
 void loop() {
+counter_formatting();
 // adding the value of each button to a seperate var
 up = button_up.press();
 down = button_down.press();
@@ -264,11 +284,9 @@ if (select_mode == 1){
 }
 else if(select_mode == 0){
   main_screen(chosen_value);
-}
-
-   
+}  
 screen_off();
-Serial.print(seconds_passed);
+
 display.display();
 }
  
