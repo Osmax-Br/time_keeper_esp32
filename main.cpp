@@ -1,20 +1,18 @@
 #include <Arduino.h>
 #include "ESPAsyncWebServer.h"
 #include <press.h> // for multiple buttons regestration
-#include <ArduinoJson.h>
-#include <HTTPClient.h>
-#include <WiFi.h>
-#include <WiFiClient.h>
-#include <WiFiServer.h>
-#include <WiFiUdp.h>
-#include <Keypad.h>
-#include <NTPClient.h>
-#include <SPI.h>
-#include <Wire.h>
-#include <WiFiUdp.h>
+//#include <ArduinoJson.h>
+//#include <HTTPClient.h>
+//#include <WiFi.h>
+//#include <WiFiClient.h>
+//#include <WiFiServer.h>
+//#include <WiFiUdp.h>
+//#include <NTPClient.h>
+//#include <SPI.h>
+//#include <Wire.h>
+//#include <WiFiUdp.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <SPI.h>
 #include <ESP32Time.h> // for using the internal rtc
 //oled screen init
 #define SCREEN_WIDTH 128
@@ -40,8 +38,15 @@ int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0
 ESP32Time rtc(3600); // utc time offset , here in Syria it is 1 hour = 3600 sec
 
 //network credentials
-const char *ssid     = "lemone"; 
-const char *password = "Hta87#Mi00";
+const char *ssid     = "Najjar"; 
+const char *password = "tecoof1937";
+// for setting specific ip address
+IPAddress local_IP(192, 168, 1, 199); //192.168.1.199
+IPAddress gateway(192, 168, 1, 1);
+IPAddress subnet(255, 255, 0, 0);
+IPAddress primaryDNS(8, 8, 8, 8);   //optional
+IPAddress secondaryDNS(8, 8, 4, 4); //optional
+
 
 //making button clases , each button is a spereate object
 button_press button_up(35);
@@ -54,11 +59,15 @@ String up,down,right,left,selecT = "" ; // strores button values
 int up_bounce,down_bounce,righ_bounce,left_bounce,selecT_bounce = 0;  // stores bounce press values
 
 
+//hw_timer_t * timer = NULL; //setting up the timer
+//volatile int seconds_passed; // storing the activity time in SRAM for faster execution
+//portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
-
-
-
-TaskHandle_t Task1; //for having the time from ntp (runs on core 0)
+//void IRAM_ATTR onTimer() {      //Defining Inerrupt function with IRAM_ATTR for faster access
+// portENTER_CRITICAL_ISR(&timerMux);
+// seconds_passed++;
+// portEXIT_CRITICAL_ISR(&timerMux);
+//}
 
 
 
@@ -120,17 +129,9 @@ void grid_navigiation(){
     cursor[1] = cursor[1] + 1 ; 
     display.clearDisplay();
   }} 
-  
-  
-  //if(selecT_bounce == 1){
     display.clearDisplay(); //without it the lables will over lap
     display.fillRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], WHITE); //making the rectangular white
-  //}
-  //else if(selecT_bounce == 0){
-   // display.clearDisplay();
-    //display.fillRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], BLACK);
-    //display.drawRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], WHITE); //making the rectangualr normal again
- // }
+
 
 
 if(selecT == "pressed"){ //the action which happens when something is selected
@@ -142,7 +143,7 @@ for(int i=0 ; i<12 ; i++){
   if(x1==x && y==y1){
     chosen_value = str[current_page][i]; //the Actual selected value 
     Serial.print(str[current_page][i]);
-    //select_mode = 0;
+    select_mode = 0;
     break;
   }
 }
@@ -177,7 +178,7 @@ void main_screen(String chosen_value){
   display.print("00:00:00");
   display.setTextSize(1);
   display.setCursor(0,20+15);
-  display.print(rtc.getTime("%I:%M:%S %p %a %d/%m")); //printing current time from the rtc
+ display.print(rtc.getTime("%I:%M:%S %p %a %d/%m")); //printing current time from the rtc
 
 }
 
@@ -185,22 +186,17 @@ void main_screen(String chosen_value){
 void screen_off(){
 
  if(right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed"){
+  
   display.ssd1306_command(SSD1306_DISPLAYON);
   last_time_screen_on = millis();
   }  
 if(last_time_screen_on+8000<millis()){
+  select_mode = 0;
   display.ssd1306_command(SSD1306_DISPLAYOFF);
   }  
 }
 
 
- void get_ntp_time( void * pvParameters){
-  //Serial.println(xPortGetCoreID());
-}
-
-void Task1code( void * pvParameters ){
-
-}
 
 
 void setup() {
@@ -209,20 +205,35 @@ void setup() {
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE);
+  display.setCursor(0,0);
+
+
+
+ // timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
+//timerAttachInterrupt(timer, &onTimer, true); 	// Attach interrupt
+  //timerAlarmWrite(timer, 1000000, true);  		// Match value= 1000000 for 1 sec. delay.
+ // timerAlarmEnable(timer);           			// Enable Timer with interrupt (Alarm Enable)
+
+
+  //connecting to wifi , the ip address is 192.168.1.199
+if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {  // ensuring no error happened
+  }
+  display.print("connecting.......");
+  display.display();
+  int connection_begin = millis();  //for timing out
+     if(WiFi.status() != WL_CONNECTED){
+      while(WiFi.status() != WL_CONNECTED && millis() <= connection_begin+20000){
+        WiFi.begin(ssid, password);
+        break;    
+      } 
+     
+    }
+    display.clearDisplay();
+
   rtc.setTime(30, 24, 18, 26, 7, 2023);
-  
-xTaskCreatePinnedToCore(
-                    Task1code,   /* Task function. */
-                    "Task1",     /* name of task. */
-                    10000,       /* Stack size of task */
-                    NULL,        /* parameter of the task */
-                    1,           /* priority of the task */
-                    &Task1,      /* Task handle to keep track of created task */
-                    0);
+           
 
-
-
- }
+}
 
 
 
@@ -257,7 +268,7 @@ else if(select_mode == 0){
 
    
 screen_off();
-
+//Serial.print(seconds_passed);
 display.display();
 }
  
