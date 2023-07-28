@@ -36,10 +36,12 @@ int lastpress,press_state = 0; //for button class
 int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
 
 ESP32Time rtc(3600); // utc time offset , here in Syria it is 1 hour = 3600 sec
+bool rtc_time_updated = false;
+
 
 //network credentials
-const char *ssid     = "Najjar"; 
-const char *password = "tecoof1937";
+const char *ssid     = "lemone"; 
+const char *password = "Hta87#Mi00";
 // for setting specific ip address
 IPAddress local_IP(192, 168, 1, 199); //192.168.1.199
 IPAddress gateway(192, 168, 1, 1);
@@ -64,7 +66,29 @@ volatile int seconds_passed; // storing the counter seconds in SRAM for faster e
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 int minutes_passed,hours_passed = 0; //storing the counter values
 char time_counter_string[10] ;  // storing the formatted counter time
-bool paused = false ; // for pausing timer
+bool paused = true ; // for pausing timer
+
+
+TaskHandle_t ntp_time;
+
+void get_ntp_time( void * pvParameters ){
+    for(;;) {
+    if(WiFi.status() != WL_CONNECTED && rtc_time_updated == false){
+      delay(5000);
+    // getting the time from ntp server
+  configTime(7200,0, "pool.ntp.org");   // utc offset , daylight saving , ntp server
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)){
+    rtc.setTimeStruct(timeinfo); 
+    rtc_time_updated = true ;
+  }
+      
+
+    }
+  }
+}
+
+
 
 void IRAM_ATTR onTimer() {      //Defining Inerrupt function with IRAM_ATTR for faster access
 if(paused == false){
@@ -182,24 +206,29 @@ void main_screen(String chosen_value){
   display.print(time_counter_string);
   display.setTextSize(1);
   display.setCursor(0,20+15);
+  if(rtc_time_updated == true){
  display.print(rtc.getTime("%I:%M:%S %p %a %d/%m")); //printing current time from the rtc
+  }
+  else{
+    display.print("Error! cant get time"); 
+  }
 
 }
 
 
 void screen_off(){
 
- if(right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed"){
+ if(right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed"){  // wake the screen up
   
   display.ssd1306_command(SSD1306_DISPLAYON);
   if(select_mode != 1){ //for not interfering with the grid selection
-  select_mode = 0;
+  select_mode = 0;    // back to main screen
   }
   last_time_screen_on = millis();
   }  
-if(last_time_screen_on+8000<millis()){
-  select_mode = 3;
-  display.ssd1306_command(SSD1306_DISPLAYOFF);
+if(last_time_screen_on+30000<millis()){  // change the auto display_off time 
+  select_mode = 3; // that means the screen is off
+  display.ssd1306_command(SSD1306_DISPLAYOFF); // switch the display off
   }  
 }
 
@@ -221,7 +250,7 @@ sprintf(time_counter_string,"%02i:%02i:%02i",hours_passed,minutes_passed,seconds
 }
 
 void setup() {
-  sprintf(time_counter_string,"%02i:%02i:%02i",hours_passed,minutes_passed,seconds_passed);
+  sprintf(time_counter_string,"%02i:%02i:%02i",hours_passed,minutes_passed,seconds_passed); // for initilizing the counter string
 
   Serial.begin(115200);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -253,8 +282,9 @@ if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {  // ens
     }
     display.clearDisplay();
 
-  rtc.setTime(30, 24, 18, 26, 7, 2023);
-           
+
+  xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
+     
 
 }
 
