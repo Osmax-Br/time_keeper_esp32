@@ -64,13 +64,14 @@ volatile int seconds_passed; // storing the counter seconds in SRAM for faster e
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 int minutes_passed,hours_passed = 0; //storing the counter values
 char time_counter_string[10] ;  // storing the formatted counter time
-
+bool paused = false ; // for pausing timer
 
 void IRAM_ATTR onTimer() {      //Defining Inerrupt function with IRAM_ATTR for faster access
- portENTER_CRITICAL_ISR(&timerMux);
+if(paused == false){
+ portENTER_CRITICAL_ISR(&timerMux); // for stopping other functions of changing this value at the same time
  seconds_passed++;
  portEXIT_CRITICAL_ISR(&timerMux);
-}
+}}
 
 
 
@@ -191,10 +192,13 @@ void screen_off(){
  if(right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed"){
   
   display.ssd1306_command(SSD1306_DISPLAYON);
+  if(select_mode != 1){ //for not interfering with the grid selection
+  select_mode = 0;
+  }
   last_time_screen_on = millis();
   }  
 if(last_time_screen_on+8000<millis()){
-  select_mode = 0;
+  select_mode = 3;
   display.ssd1306_command(SSD1306_DISPLAYOFF);
   }  
 }
@@ -202,7 +206,7 @@ if(last_time_screen_on+8000<millis()){
 
 void counter_formatting(){
   
-if(seconds_passed == 59){
+if(seconds_passed > 59){
   portENTER_CRITICAL(&timerMux);
   seconds_passed = 0;
   portEXIT_CRITICAL(&timerMux);
@@ -268,7 +272,7 @@ selecT = button_selecT.press(); // the name is with "T" not "t" due to interfera
 // adding the values of bounce press vars
 selecT_bounce = button_selecT.bounce_press(); 
 
-if(selecT == "long_pressed"){ //this is for entering the grid mode or main screen
+if(selecT == "long_pressed" ){ //this is for entering the grid mode or main screen
   if(select_mode == 1){
     select_mode = 0;
   }
@@ -284,6 +288,14 @@ if (select_mode == 1){
 }
 else if(select_mode == 0){
   main_screen(chosen_value);
+  if(selecT == "pressed" && select_mode != 3){
+    if(paused == false){
+      paused = true;
+    }
+  else if(paused == true){
+    paused = false;
+  }  
+  }
 }  
 screen_off();
 
