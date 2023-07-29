@@ -2,24 +2,31 @@
 #include "ESPAsyncWebServer.h"
 #include <press.h> // for multiple buttons regestration
 //#include <ArduinoJson.h>
-//#include <HTTPClient.h>
+#include <HTTPClient.h>
 //#include <WiFi.h>
-//#include <WiFiClient.h>
-//#include <WiFiServer.h>
+#include <WiFiClient.h>
+#include <WiFiServer.h>
 //#include <WiFiUdp.h>
 //#include <NTPClient.h>
 //#include <SPI.h>
 //#include <Wire.h>
 //#include <WiFiUdp.h>
+#include "html.h" // the website code
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ESP32Time.h> // for using the internal rtc
+
+//**********************************************
+
 //oled screen init
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 int last_time_screen_on = 0;
+
+
+//************************************************
 //ui vars
 String chosen_value = "Nothing"; //the chosen value from the grid
 int select_mode = 0 ; //for maniging selection ways
@@ -35,10 +42,13 @@ int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},
 int lastpress,press_state = 0; //for button class
 int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
 
+//************************************************************
+// rtc vars
+
 ESP32Time rtc(3600); // utc time offset , here in Syria it is 1 hour = 3600 sec
 bool rtc_time_updated = false;
 
-
+//**************************************************************
 //network credentials
 const char *ssid     = "lemone"; 
 const char *password = "Hta87#Mi00";
@@ -50,6 +60,10 @@ IPAddress primaryDNS(8, 8, 8, 8);   //optional
 IPAddress secondaryDNS(8, 8, 4, 4); //optional
 int connection_begin = 0; //knowing the last time the device attempted to connect to wifi
 
+
+
+//***************************************************************
+//buttons vars
 //making button clases , each button is a spereate object
 button_press button_up(35);
 button_press button_down(34);
@@ -60,27 +74,138 @@ int last_press_time = 0; // for ignoring multiple presses at the same moment
 String up,down,right,left,selecT = "" ; // strores button values
 int up_bounce,down_bounce,righ_bounce,left_bounce,selecT_bounce = 0;  // stores bounce press values
 
+//****************************************************************
+// internal rtc timer vars
 
 hw_timer_t * timer = NULL; //setting up the timer
 volatile int seconds_passed; // storing the counter seconds in SRAM for faster execution
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
-int minutes_passed,hours_passed = 0; //storing the counter values
+volatile int minutes_passed,hours_passed = 0; //storing the counter values
 char time_counter_string[10] ;  // storing the formatted counter time
-bool paused = true ; // for pausing timer
+volatile bool paused = true ; // for pausing timer
+SemaphoreHandle_t semaphore_paused;
 
+//****************************************************************
+// web server vars
+WiFiClient  clientt;
+AsyncWebServer server(80);
+String timer_web_var(){
+  return time_counter_string;
+}
 
+String chosen_value_web_var(){
+  return chosen_value;
+
+}
+String pause_web_var(){
+  if(paused == true){
+    if(seconds_passed == 0 && minutes_passed == 0 && hours_passed == 0){
+      return "Start";}
+    else{  
+    return "Resume";}
+  }
+  else if(paused == false ){
+    return "Pause";
+  }
+ else{
+  return "ERROR !";
+ } 
+}
+String var_processor(const String& var){
+  //Serial.println(var);
+  if(var == "Timer"){
+    return timer_web_var();
+  }
+  else if(var == "Chosen_server"){
+    return chosen_value_web_var();
+    }
+  else if(var == "Pause"){
+    return pause_web_var();
+    }  
+  return String();
+}
+//**************************************************************
+//multi-tasking
 TaskHandle_t ntp_time;
 
-void get_ntp_time( void * pvParameters ){
+
+
+
+
+
+
+
+void web_server(){
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html, var_processor);
+  });
+  
+  server.on("/timer", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", timer_web_var().c_str());
+  });
+   server.on("/chosen_server", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", chosen_value_web_var().c_str());
+  });
+    server.on("/Pause", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "ok");
+  });
+  server.on("/btn", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", pause_web_var().c_str());
+  });
+  server.on("/Resume", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "ok");
+  });
+   server.on("/PauseBtn", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    if(paused==true){
+        //xSemaphoreTake(semaphore_paused, portMAX_DELAY);
+        paused = false;
+        //xSemaphoreGive(semaphore_paused);
+      }
+    else if(paused == false){
+        //xSemaphoreTake(semaphore_paused, portMAX_DELAY);
+        paused = true;
+       // xSemaphoreGive(semaphore_paused);
+      } 
+    
+    request->send(200, "text/plain", "ok");
+  });
+  server.on("/choseee", HTTP_GET, [] (AsyncWebServerRequest *request) {
+    String inputMessage = "";
+    String inputParam;
+    // GET input1 value on <ESP_IP>/get?input1=<inputMessage>
+    if (request->hasParam("input1")) {
+      inputMessage = request->getParam("input1")->value();
+      inputParam = "input1";
+     int chosen_value_index = 0; // for chosing the value index from str array (activity) 
+      for(int i =0 ; i<12 ;i++){
+      if(str[3][i] == "/"){
+        chosen_value_index = i;
+        break;
+     }}
+    // must put semaphore
+    current_page = 3 ;
+    str[3][chosen_value_index] = inputMessage;
+    chosen_value = str[3][chosen_value_index];
+    }
+    request->send(200, "text/html", " <meta http-equiv='refresh' content='0; URL=http://192.168.1.199/'> ");
+  });
+ 
+  server.begin();
+}
+
+
+
+
+
+void get_ntp_time( void * pvParameters ){ //get time data from ntp
     for(;;) {
     if(WiFi.status() != WL_CONNECTED && rtc_time_updated == false){
-      delay(5000);
     // getting the time from ntp server
   configTime(7200,0, "pool.ntp.org");   // utc offset , daylight saving , ntp server
   struct tm timeinfo;
   if (getLocalTime(&timeinfo)){
-    rtc.setTimeStruct(timeinfo); 
-    rtc_time_updated = true ;
+    rtc.setTimeStruct(timeinfo); // set the rtc time from ntp
+    rtc_time_updated = true ; // dont reconntect to ntp servers
   }
       
 
@@ -288,7 +413,7 @@ void setup() {
 
 
   xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
-     
+      web_server();
 
 }
 
@@ -322,17 +447,21 @@ if (select_mode == 1){
 }
 else if(select_mode == 0){
   main_screen(chosen_value);
-  if(selecT == "pressed" && select_mode != 3){
+  if(selecT == "pressed" && select_mode != 3){ // pressing sclect while screen is off doesnt change pause value (select_mode 3)
     if(paused == false){
+    //  xSemaphoreTake(semaphore_paused, portMAX_DELAY);
       paused = true;
+     // xSemaphoreGive(semaphore_paused);
     }
   else if(paused == true){
+  //  xSemaphoreTake(semaphore_paused, portMAX_DELAY);
     paused = false;
+//xSemaphoreGive(semaphore_paused);
   }  
   }
 }  
 
-if(WiFi.status() != WL_CONNECTED && millis() > connection_begin + 3600000){
+if(WiFi.status() != WL_CONNECTED && millis() > connection_begin + 3600000){ // if wifi isnt connected , try to connect every 1 hour
   connect_wifi();
 }
 
