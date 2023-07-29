@@ -48,7 +48,7 @@ IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 IPAddress primaryDNS(8, 8, 8, 8);   //optional
 IPAddress secondaryDNS(8, 8, 4, 4); //optional
-
+int connection_begin = 0; //knowing the last time the device attempted to connect to wifi
 
 //making button clases , each button is a spereate object
 button_press button_up(35);
@@ -99,7 +99,22 @@ if(paused == false){
 
 
 
+void connect_wifi(){
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {  // ensuring no error happened
+  }
+  display.print("connecting.......");
+  display.display();
+  connection_begin = millis();  //for timing out
+     if(WiFi.status() != WL_CONNECTED){
+      while(WiFi.status() != WL_CONNECTED && millis() <= connection_begin+20000){
+        WiFi.begin(ssid, password);
+        break;    
+      } 
+     
+    }
 
+
+}
 
 void draw_grid(){ //used this method for easier tex inverting 
   for(int i = 0 ; i<4 ; i++){
@@ -268,18 +283,7 @@ void setup() {
 
 
   //connecting to wifi , the ip address is 192.168.1.199
-if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {  // ensuring no error happened
-  }
-  display.print("connecting.......");
-  display.display();
-  int connection_begin = millis();  //for timing out
-     if(WiFi.status() != WL_CONNECTED){
-      while(WiFi.status() != WL_CONNECTED && millis() <= connection_begin+20000){
-        WiFi.begin(ssid, password);
-        break;    
-      } 
-     
-    }
+    connect_wifi();
     display.clearDisplay();
 
 
@@ -327,6 +331,12 @@ else if(select_mode == 0){
   }  
   }
 }  
+
+if(WiFi.status() != WL_CONNECTED && millis() > connection_begin + 3600000){
+  connect_wifi();
+}
+
+
 screen_off();
 
 display.display();
