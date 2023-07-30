@@ -46,7 +46,7 @@ int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0
 // rtc vars
 
 ESP32Time rtc(3600); // utc time offset , here in Syria it is 1 hour = 3600 sec
-bool rtc_time_updated = false;
+bool rtc_time_updated = false;  // for not updating the time twice from the internet
 
 //**************************************************************
 //network credentials
@@ -83,7 +83,6 @@ portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 volatile int minutes_passed,hours_passed = 0; //storing the counter values
 char time_counter_string[10] ;  // storing the formatted counter time
 volatile bool paused = true ; // for pausing timer
-SemaphoreHandle_t semaphore_paused;
 
 //****************************************************************
 // web server vars
@@ -126,16 +125,27 @@ String var_processor(const String& var){
 }
 //**************************************************************
 //multi-tasking
-TaskHandle_t ntp_time;
+TaskHandle_t ntp_time;  // getting the tine from internet 
+
+
+//**************************************************************
+//storage vars
+int data_storage[4][13][3] ;
+int data_storage_index = 0;
 
 
 
 
 
 
-
+void update_data_storage(){
+    data_storage[current_page][data_storage_index][0] = seconds_passed ;
+    data_storage[current_page][data_storage_index][1] = minutes_passed ;
+    data_storage[current_page][data_storage_index][3] = hours_passed ;
+}
 
 void web_server(){
+  
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, var_processor);
   });
@@ -157,14 +167,10 @@ void web_server(){
   });
    server.on("/PauseBtn", HTTP_GET, [] (AsyncWebServerRequest *request) {
     if(paused==true){
-        //xSemaphoreTake(semaphore_paused, portMAX_DELAY);
         paused = false;
-        //xSemaphoreGive(semaphore_paused);
       }
     else if(paused == false){
-        //xSemaphoreTake(semaphore_paused, portMAX_DELAY);
         paused = true;
-       // xSemaphoreGive(semaphore_paused);
       } 
     
     request->send(200, "text/plain", "ok");
@@ -186,7 +192,7 @@ void web_server(){
     current_page = 3 ;
     str[3][chosen_value_index] = inputMessage;
     chosen_value = str[3][chosen_value_index];
-    }
+      }
     request->send(200, "text/html", " <meta http-equiv='refresh' content='0; URL=http://192.168.1.199/'> ");
   });
  
@@ -309,8 +315,14 @@ for(int i=0 ; i<12 ; i++){
   int x1 = table[i][0];
   int y1 = table[i][1];
   if(x1==x && y==y1){
+    update_data_storage(); // updated (BEFORE) changing the index
     chosen_value = str[current_page][i]; //the Actual selected value 
-    Serial.print(str[current_page][i]);
+    data_storage_index = i ; //for knowing wher to store time data
+    portENTER_CRITICAL(&timerMux);
+    seconds_passed = 0;
+    portEXIT_CRITICAL(&timerMux);
+    minutes_passed = 0;
+    hours_passed = 0;
     select_mode = 0;
     break;
   }
@@ -322,7 +334,7 @@ if(right == "long_pressed" && current_page != 3){ //for flipping pages and ensur
   current_page +=1 ;   // change page
 }
 if(left == "long_pressed" && current_page != 0){
-  current_page -= 1;
+  current_page -=1 ;   // change page 
 }
 
 print_label(current_page,cursor[0],cursor[1]); // printing the lables
@@ -411,9 +423,10 @@ void setup() {
     connect_wifi();
     display.clearDisplay();
 
+ 
+   xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
 
-  xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
-      web_server();
+    web_server();
 
 }
 
@@ -449,14 +462,18 @@ else if(select_mode == 0){
   main_screen(chosen_value);
   if(selecT == "pressed" && select_mode != 3){ // pressing sclect while screen is off doesnt change pause value (select_mode 3)
     if(paused == false){
-    //  xSemaphoreTake(semaphore_paused, portMAX_DELAY);
+      update_data_storage();
       paused = true;
-     // xSemaphoreGive(semaphore_paused);
     }
   else if(paused == true){
-  //  xSemaphoreTake(semaphore_paused, portMAX_DELAY);
+    if(data_storage[current_page][data_storage_index][0] != 0 || data_storage[current_page][data_storage_index][1] != 0 || data_storage[current_page][data_storage_index][2] != 0){
+      portENTER_CRITICAL(&timerMux);
+      seconds_passed = data_storage[current_page][data_storage_index][0];
+      portEXIT_CRITICAL(&timerMux);
+      minutes_passed = data_storage[current_page][data_storage_index][1];
+      hours_passed = data_storage[current_page][data_storage_index][2];
+    }
     paused = false;
-//xSemaphoreGive(semaphore_paused);
   }  
   }
 }  
