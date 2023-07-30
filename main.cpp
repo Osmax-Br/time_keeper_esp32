@@ -84,6 +84,14 @@ volatile int minutes_passed,hours_passed = 0; //storing the counter values
 char time_counter_string[10] ;  // storing the formatted counter time
 volatile bool paused = true ; // for pausing timer
 
+
+
+//**************************************************************
+//storage vars
+int data_storage[4][13][3] ;
+int data_storage_index = 0;
+
+
 //****************************************************************
 // web server vars
 WiFiClient  clientt;
@@ -98,7 +106,7 @@ String chosen_value_web_var(){
 }
 String pause_web_var(){
   if(paused == true){
-    if(seconds_passed == 0 && minutes_passed == 0 && hours_passed == 0){
+    if(data_storage[current_page][data_storage_index][0] == 0 && data_storage[current_page][data_storage_index][1] && data_storage[current_page][data_storage_index][2]){
       return "Start";}
     else{  
     return "Resume";}
@@ -128,21 +136,12 @@ String var_processor(const String& var){
 TaskHandle_t ntp_time;  // getting the tine from internet 
 
 
-//**************************************************************
-//storage vars
-int data_storage[4][13][3] ;
-int data_storage_index = 0;
 
 
 
 
 
 
-void update_data_storage(){
-    data_storage[current_page][data_storage_index][0] = seconds_passed ;
-    data_storage[current_page][data_storage_index][1] = minutes_passed ;
-    data_storage[current_page][data_storage_index][3] = hours_passed ;
-}
 
 void web_server(){
   
@@ -166,7 +165,7 @@ void web_server(){
     request->send(200, "text/plain", "ok");
   });
    server.on("/PauseBtn", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    if(paused==true){
+    if(paused==true && chosen_value != "Nothing"){
         paused = false;
       }
     else if(paused == false){
@@ -222,9 +221,9 @@ void get_ntp_time( void * pvParameters ){ //get time data from ntp
 
 
 void IRAM_ATTR onTimer() {      //Defining Inerrupt function with IRAM_ATTR for faster access
-if(paused == false){
+if(paused == false && chosen_value != "Nothing"){
  portENTER_CRITICAL_ISR(&timerMux); // for stopping other functions of changing this value at the same time
- seconds_passed++;
+ data_storage[current_page][data_storage_index][0] ++ ;
  portEXIT_CRITICAL_ISR(&timerMux);
 }}
 
@@ -315,14 +314,8 @@ for(int i=0 ; i<12 ; i++){
   int x1 = table[i][0];
   int y1 = table[i][1];
   if(x1==x && y==y1){
-    update_data_storage(); // updated (BEFORE) changing the index
     chosen_value = str[current_page][i]; //the Actual selected value 
     data_storage_index = i ; //for knowing wher to store time data
-    portENTER_CRITICAL(&timerMux);
-    seconds_passed = 0;
-    portEXIT_CRITICAL(&timerMux);
-    minutes_passed = 0;
-    hours_passed = 0;
     select_mode = 0;
     break;
   }
@@ -387,22 +380,22 @@ if(last_time_screen_on+30000<millis()){  // change the auto display_off time
 
 void counter_formatting(){
   
-if(seconds_passed > 59){
+if(data_storage[current_page][data_storage_index][0] > 59){
   portENTER_CRITICAL(&timerMux);
-  seconds_passed = 0;
+  data_storage[current_page][data_storage_index][0] = 0;
   portEXIT_CRITICAL(&timerMux);
-  minutes_passed++;
+  data_storage[current_page][data_storage_index][1] ++ ;
 }
-if(minutes_passed == 59){
-  minutes_passed = 0;
-  hours_passed ++ ;
+if(data_storage[current_page][data_storage_index][1] == 59){
+  data_storage[current_page][data_storage_index][1] = 0;
+  data_storage[current_page][data_storage_index][2] ++ ;
 }
-sprintf(time_counter_string,"%02i:%02i:%02i",hours_passed,minutes_passed,seconds_passed);
+sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);
 
 }
 
 void setup() {
-  sprintf(time_counter_string,"%02i:%02i:%02i",hours_passed,minutes_passed,seconds_passed); // for initilizing the counter string
+  sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);  // for initilizing the counter string
 
   Serial.begin(115200);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -460,19 +453,11 @@ if (select_mode == 1){
 }
 else if(select_mode == 0){
   main_screen(chosen_value);
-  if(selecT == "pressed" && select_mode != 3){ // pressing sclect while screen is off doesnt change pause value (select_mode 3)
+  if(selecT == "pressed" && select_mode != 3 && chosen_value != "Nothing"){ // pressing sclect while screen is off doesnt change pause value (select_mode 3)
     if(paused == false){
-      update_data_storage();
       paused = true;
     }
   else if(paused == true){
-    if(data_storage[current_page][data_storage_index][0] != 0 || data_storage[current_page][data_storage_index][1] != 0 || data_storage[current_page][data_storage_index][2] != 0){
-      portENTER_CRITICAL(&timerMux);
-      seconds_passed = data_storage[current_page][data_storage_index][0];
-      portEXIT_CRITICAL(&timerMux);
-      minutes_passed = data_storage[current_page][data_storage_index][1];
-      hours_passed = data_storage[current_page][data_storage_index][2];
-    }
     paused = false;
   }  
   }
