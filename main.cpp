@@ -5,7 +5,7 @@
 #include <HTTPClient.h>
 //#include <WiFi.h>
 #include <WiFiClient.h>
-#include <WiFiServer.h>
+#include <WiFiServer.h>fgfg
 //#include <WiFiUdp.h>
 //#include <NTPClient.h>
 //#include <SPI.h>
@@ -15,7 +15,11 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ESP32Time.h> // for using the internal rtc
+/*
 
+INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_passed,activity_date_month,activity_date_day_number,activity_date_weekday,activity_date_hour,activity_date_minute)
+      VALUES ('Paul', 32, 32, 32 , 1 ,1 , "wed" ,1 ,1 );
+*/
 //**********************************************
 
 //oled screen init
