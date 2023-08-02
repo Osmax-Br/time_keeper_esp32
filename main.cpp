@@ -3,9 +3,9 @@
 #include <press.h> // for multiple buttons regestration
 //#include <ArduinoJson.h>
 #include <HTTPClient.h>
-//#include <WiFi.h>
+#include <WiFi.h>
 #include <WiFiClient.h>
-#include <WiFiServer.h>fgfg
+#include <WiFiServer.h>
 //#include <WiFiUdp.h>
 //#include <NTPClient.h>
 //#include <SPI.h>
@@ -51,6 +51,8 @@ int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0
 
 ESP32Time rtc(3600); // utc time offset , here in Syria it is 1 hour = 3600 sec
 bool rtc_time_updated = false;  // for not updating the time twice from the internet
+int last_rtc_update = 0;
+
 
 //**************************************************************
 //network credentials
@@ -140,8 +142,159 @@ String var_processor(const String& var){
 TaskHandle_t ntp_time;  // getting the tine from internet 
 
 
+//************************************************************
+// sql vars
+const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php"; //must add year to database
 
 
+
+//********************************************************
+//drop screen vars
+String options_list[4][4] = {{"save today","change location","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","",""},{"","","",""}};
+int cursor_place = 1;
+int options_outer_counter = 0;
+int block_cursor = 0;
+
+
+
+
+void drop_screen(){
+  
+  for(int i =0 ;i<=4 ; i++){
+    if(i==block_cursor){
+      display.fillRect(0,16*i,110,16,WHITE);
+    }
+    else{
+      display.drawRect(0,16*i,110,16,WHITE);}
+      }
+  int options_inner_counter = 0;   
+  for(int i=5;i<=50;i+=15){
+     display.setCursor(9,i+1);
+     if(options_inner_counter == block_cursor){
+      display.setTextColor(BLACK);
+     }
+     else{
+      display.setTextColor(WHITE);
+     }
+    display.print(options_list[options_outer_counter][options_inner_counter]);
+    //Serial.println(options_inner_counter);
+    options_inner_counter++;
+    }
+  
+  
+  for(int i=0 ; i <=64 ; i+=8){   // the dots
+    display.fillRect(122,i,2,2,WHITE);
+          }
+
+  if(up == "pressed"){
+    if(options_outer_counter + block_cursor != 0){
+    block_cursor --;}
+
+
+    if(block_cursor == -1  && cursor_place !=1){
+      block_cursor = 3;
+    cursor_place -= 10;
+    options_outer_counter--;}
+  }
+  if(down == "pressed"){
+    if(options_outer_counter == 3 && block_cursor ==3){}
+    else{
+    block_cursor ++ ;}
+    if(block_cursor == 4  && cursor_place != 31 && options_outer_counter != 4){
+      block_cursor = 0;
+    cursor_place += 10; 
+    options_outer_counter++;}
+  }
+  display.fillRoundRect(120,cursor_place,5,20,5,WHITE);
+  
+  
+  display.display();
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// must add last_time var
+void post() { // for pushing the data into the sqlite data base on the pc
+// on pc I used wimp to host a server
+ 
+ // http post
+    if(WiFi.status()== WL_CONNECTED){ 
+      HTTPClient http;
+      
+   
+      http.begin(sql_server);
+      	
+      http.addHeader("Content-Type", "application/x-www-form-urlencoded"); //Specify content-type header
+     
+     char post_message[500] ; //storing the post message
+     // should change the values in the next line to varaibles
+     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%i&activity_date_day_number=%i&activity_date_weekday=%s&activity_date_hour=%i&activity_date_minute=%i","football",24,12,6,6,2,"wed",3,5);
+      int httpResponseCode = http.POST(post_message);   
+      if(httpResponseCode>0){
+  
+    String response = http.getString();  //Get the response to the request
+  
+    //Serial.println(httpResponseCode);   //Print return code
+    Serial.println(response);           //Print request answer
+  
+    }else{
+  
+    Serial.print("Error on sending POST: ");
+    Serial.println(httpResponseCode);
+  
+}
+      
+      http.end();
+    }}
+
+void get(){
+if(WiFi.status()== WL_CONNECTED){
+      HTTPClient http;
+
+      String serverPath = sql_server;
+      
+      // Your Domain name with URL path or IP address with path
+      http.begin(serverPath.c_str());
+      // Send HTTP GET request
+      int httpResponseCode = http.GET();
+      if (httpResponseCode>0) {
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+        String payload = http.getString();
+        Serial.println(payload);
+      }
+      else {
+        Serial.print("Error code: ");
+        Serial.println(httpResponseCode);
+      }
+      // Free resources
+      http.end();
+    }
+
+
+
+}
 
 
 
@@ -208,13 +361,14 @@ void web_server(){
 
 void get_ntp_time( void * pvParameters ){ //get time data from ntp
     for(;;) {
-    if(WiFi.status() != WL_CONNECTED && rtc_time_updated == false){
+    if((WiFi.status() == WL_CONNECTED && rtc_time_updated == false) || (WiFi.status() == WL_CONNECTED && rtc_time_updated == true && millis() > last_rtc_update + 86400)){
     // getting the time from ntp server
   configTime(7200,0, "pool.ntp.org");   // utc offset , daylight saving , ntp server
   struct tm timeinfo;
   if (getLocalTime(&timeinfo)){
     rtc.setTimeStruct(timeinfo); // set the rtc time from ntp
     rtc_time_updated = true ; // dont reconntect to ntp servers
+    last_rtc_update = millis();
   }
       
 
@@ -367,12 +521,10 @@ void main_screen(String chosen_value){
 
 void screen_off(){
 
- if(right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed"){  // wake the screen up
-  
+ if((right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed") && select_mode == 3){  // wake the screen up
+  //for not interfering with the grid selection
   display.ssd1306_command(SSD1306_DISPLAYON);
-  if(select_mode != 1){ //for not interfering with the grid selection
   select_mode = 0;    // back to main screen
-  }
   last_time_screen_on = millis();
   }  
 if(last_time_screen_on+30000<millis()){  // change the auto display_off time 
@@ -422,8 +574,9 @@ void setup() {
 
  
    xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
-
+if(WiFi.status() == WL_CONNECTED){
     web_server();
+   }
 
 }
 
@@ -457,7 +610,7 @@ if (select_mode == 1){
 }
 else if(select_mode == 0){
   main_screen(chosen_value);
-  if(selecT == "pressed" && select_mode != 3 && chosen_value != "Nothing"){ // pressing sclect while screen is off doesnt change pause value (select_mode 3)
+  if(selecT == "pressed" && (select_mode == 0 || select_mode == 1) && chosen_value != "Nothing"){ // pressing sclect while screen is off doesnt change pause value (select_mode 3)
     if(paused == false){
       paused = true;
     }
@@ -465,12 +618,30 @@ else if(select_mode == 0){
     paused = false;
   }  
   }
-}  
+}
+else if(select_mode == 4) {
+  //Serial.print("drop");
+  display.clearDisplay();
+  drop_screen();
+} 
 
 if(WiFi.status() != WL_CONNECTED && millis() > connection_begin + 3600000){ // if wifi isnt connected , try to connect every 1 hour
   connect_wifi();
 }
 
+
+ 
+ 
+ if(down == "long_pressed" && select_mode == 0){
+  select_mode = 4;
+ }
+ else if(select_mode == 4 && up == "long_pressed"){
+  select_mode = 0;
+ }
+
+
+ 
+//Serial.println(select_mode);
 
 screen_off();
 
