@@ -28,7 +28,7 @@ INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_pass
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 int last_time_screen_on = 0;
-
+bool time_critical = false ; // for not turning the screen off while uploading
 
 //************************************************
 //ui vars
@@ -38,10 +38,10 @@ int filled_rect = -1 ; //for inverting text
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
 const int pages = 4; // ui pages number
 int current_page = 0; // for navigation
-String str[pages][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
-{"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec","Nothing"},
-{"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/","Nothing"},
-{"/","/","/","/","/","/","/","/","/","/","/","/","Nothing"}};
+String str[pages][12] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study"},
+{"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec"},
+{"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/"},
+{"/","/","/","/","/","/","/","/","/","/","/","/"}};
 int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},{42,17,43,18},{84,17,43,18}},{{0,33,43,17},{42,33,43,17},{84,33,43,17}},{{0,49,43,15},{42,49,43,15},{84,49,43,15}}};  //the data of each rectangular in the grid eg: width,height,x,y
 int lastpress,press_state = 0; //for button class
 int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
@@ -87,19 +87,20 @@ hw_timer_t * timer = NULL; //setting up the timer
 volatile int seconds_passed; // storing the counter seconds in SRAM for faster execution
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 volatile int minutes_passed,hours_passed = 0; //storing the counter values
-char time_counter_string[10] ;  // storing the formatted counter time
+char time_counter_string[100] ;  // storing the formatted counter time
 volatile bool paused = true ; // for pausing timer
 
 
 
 //**************************************************************
 //storage vars
-int data_storage[4][13][3] ;
+int data_storage[4][12][3] ;
 int data_storage_index = 0;
 
 
 //****************************************************************
 // web server vars
+bool server_started = false ;
 WiFiClient  clientt;
 AsyncWebServer server(80);
 String timer_web_var(){
@@ -125,7 +126,6 @@ String pause_web_var(){
  } 
 }
 String var_processor(const String& var){
-  //Serial.println(var);
   if(var == "Timer"){
     return timer_web_var();
   }
@@ -150,75 +150,16 @@ const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php"; //
 
 //********************************************************
 //drop screen vars
-String options_list[4][4] = {{"save today","change location","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","",""},{"","","",""}};
-int cursor_place = 1;
+String options_list[4][4] = {{"End day&upload","change location","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","",""},{"","","",""}};
+int scroll_bar_place = 1;
 int options_outer_counter = 0;
 int block_cursor = 0;
+int options_select_mode = 0 ;
+// 0 = menu , 1 = end&upload ....etc
+int last_option_select_time = 0;
 
 
 
-
-void drop_screen(){
-  
-  for(int i =0 ;i<=4 ; i++){
-    if(i==block_cursor){
-      display.fillRect(0,16*i,110,16,WHITE);
-    }
-    else{
-      display.drawRect(0,16*i,110,16,WHITE);}
-      }
-  int options_inner_counter = 0;   
-  for(int i=5;i<=50;i+=15){
-     display.setCursor(9,i+1);
-     if(options_inner_counter == block_cursor){
-      display.setTextColor(BLACK);
-     }
-     else{
-      display.setTextColor(WHITE);
-     }
-    display.print(options_list[options_outer_counter][options_inner_counter]);
-    //Serial.println(options_inner_counter);
-    options_inner_counter++;
-    }
-  
-  
-  for(int i=0 ; i <=64 ; i+=8){   // the dots
-    display.fillRect(122,i,2,2,WHITE);
-          }
-
-  if(up == "pressed"){
-    if(options_outer_counter + block_cursor != 0){
-    block_cursor --;}
-
-
-    if(block_cursor == -1  && cursor_place !=1){
-      block_cursor = 3;
-    cursor_place -= 10;
-    options_outer_counter--;}
-  }
-  if(down == "pressed"){
-    if(options_outer_counter == 3 && block_cursor ==3){}
-    else{
-    block_cursor ++ ;}
-    if(block_cursor == 4  && cursor_place != 31 && options_outer_counter != 4){
-      block_cursor = 0;
-    cursor_place += 10; 
-    options_outer_counter++;}
-  }
-  display.fillRoundRect(120,cursor_place,5,20,5,WHITE);
-  
-  
-  display.display();
-
-
-
-
-
-
-
-
-
-}
 
 
 
@@ -235,7 +176,7 @@ void drop_screen(){
 
 
 // must add last_time var
-void post() { // for pushing the data into the sqlite data base on the pc
+void post(int page , int activity) { // for pushing the data into the sqlite data base on the pc
 // on pc I used wimp to host a server
  
  // http post
@@ -247,28 +188,23 @@ void post() { // for pushing the data into the sqlite data base on the pc
       	
       http.addHeader("Content-Type", "application/x-www-form-urlencoded"); //Specify content-type header
      
-     char post_message[500] ; //storing the post message
+     char post_message[500] ; //storing the post message                                                                                                                                                                                                                                //rtc.getTime("%I:%M:%S %p %a %d/%m")
      // should change the values in the next line to varaibles
-     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%i&activity_date_day_number=%i&activity_date_weekday=%s&activity_date_hour=%i&activity_date_minute=%i","football",24,12,6,6,2,"wed",3,5);
+     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%i&activity_date_day_number=%i&activity_date_weekday=%s&activity_date_hour=%i&activity_date_minute=%i&activity_date_year=%i",str[page][activity],data_storage[page][activity][2],data_storage[page][activity][1],data_storage[page][activity][0],rtc.getTime("%m").toInt(),rtc.getTime("%d").toInt(),rtc.getTime("%a"),rtc.getTime("%H"),rtc.getTime("%M").toInt(),rtc.getTime("%Y").toInt());
       int httpResponseCode = http.POST(post_message);   
       if(httpResponseCode>0){
   
     String response = http.getString();  //Get the response to the request
-  
-    //Serial.println(httpResponseCode);   //Print return code
-    Serial.println(response);           //Print request answer
-  
+    Serial.println(response);
     }else{
-  
-    Serial.print("Error on sending POST: ");
-    Serial.println(httpResponseCode);
   
 }
       
       http.end();
     }}
 
-void get(){
+String get(){
+  String return_var = "";
 if(WiFi.status()== WL_CONNECTED){
       HTTPClient http;
 
@@ -279,20 +215,18 @@ if(WiFi.status()== WL_CONNECTED){
       // Send HTTP GET request
       int httpResponseCode = http.GET();
       if (httpResponseCode>0) {
-        Serial.print("HTTP Response code: ");
-        Serial.println(httpResponseCode);
-        String payload = http.getString();
-        Serial.println(payload);
+      
+        return_var = http.getString();
+      
       }
       else {
-        Serial.print("Error code: ");
-        Serial.println(httpResponseCode);
+        
       }
       // Free resources
       http.end();
     }
 
-
+  return return_var;
 
 }
 
@@ -419,13 +353,13 @@ void print_label(int current_page,int filled_rect_x , int filled_rect_y) { //pri
   display.setTextSize(1);
   int i2=0; //this is to adjust the y shift while printing labels
   for(int i=0;i<12;i++){  
-  int x = table[i][0]; // getting the coordintaes of each rectangular
-  int y = table[i][1];  
+  int _x = table[i][0]; // getting the coordintaes of each rectangular
+  int _y = table[i][1];  
   if(i==9){
     i2 = -2;  //adjusting y shift
   }
-  display.setCursor(4 + 41 * x,3 + (17 * y) +i2); //setting writing cursor
-  if(x == filled_rect_x && y==filled_rect_y){ //&& selecT_bounce == 1){   //this is for inverting the text color while selecting
+  display.setCursor(4 + 41 * _x,3 + (17 * _y) +i2); //setting writing cursor
+  if(_x == filled_rect_x && _y==filled_rect_y){ //&& selecT_bounce == 1){   //this is for inverting the text color while selecting
   display.setTextColor(BLACK);
   display.print(str[current_page][i]);} //printing the labels
   else{
@@ -436,9 +370,9 @@ void print_label(int current_page,int filled_rect_x , int filled_rect_y) { //pri
 }
 
 void grid_navigiation(){
-  select_mode = 1;
-    int x = cursor[1]; // getting current cursor coordintes
-    int y = cursor[0];
+    select_mode = 1;
+    int x = cursor[0]; // getting current cursor coordintes
+    int y = cursor[1];
   if(right == "pressed"){
     if(cursor[0] + 1 != 3){ //this is for checking the the cursor doesnt go out of the screen (stops at the edges)
     cursor[0] = cursor[0] + 1; // adjusting x cursor
@@ -461,17 +395,19 @@ void grid_navigiation(){
     display.clearDisplay();
   }} 
     display.clearDisplay(); //without it the lables will over lap
-    display.fillRect(rect_cord[x][y][0],rect_cord[x][y][1],rect_cord[x][y][2],rect_cord[x][y][3], WHITE); //making the rectangular white
+    display.fillRect(rect_cord[y][x][0],rect_cord[y][x][1],rect_cord[y][x][2],rect_cord[y][x][3], WHITE); //making the rectangular white (needed to swap the x&y because of typing error)
 
 
 
 if(selecT == "pressed"){ //the action which happens when something is selected
 int x = cursor[0]; //the same code used in the function print_label
 int y = cursor[1]; //the code is mainly to change from coordinates in cusor to a number which allows us to know the value selected
+
 for(int i=0 ; i<12 ; i++){
   int x1 = table[i][0];
   int y1 = table[i][1];
   if(x1==x && y==y1){
+    
     chosen_value = str[current_page][i]; //the Actual selected value 
     data_storage_index = i ; //for knowing wher to store time data
     select_mode = 0;
@@ -493,8 +429,9 @@ print_label(current_page,cursor[0],cursor[1]); // printing the lables
 
 
 
-void main_screen(String chosen_value){
-  display.clearDisplay();
+void main_screen(){
+ display.clearDisplay();
+ display.setTextColor(WHITE);
   display.setCursor(0,40+15);
   display.setTextSize(1);
   display.print("choice: ");
@@ -515,19 +452,21 @@ void main_screen(String chosen_value){
   else{
     display.print("Error! cant get time"); 
   }
-
+  display.display();
 }
 
 
 void screen_off(){
 
- if((right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed") && select_mode == 3){  // wake the screen up
+ if((right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed")){  // wake the screen up
   //for not interfering with the grid selection
   display.ssd1306_command(SSD1306_DISPLAYON);
+  if(select_mode == 3){
   select_mode = 0;    // back to main screen
+  }
   last_time_screen_on = millis();
   }  
-if(last_time_screen_on+30000<millis()){  // change the auto display_off time 
+if(last_time_screen_on+30000<millis() && time_critical == false){  // change the auto display_off time 
   select_mode = 3; // that means the screen is off
   display.ssd1306_command(SSD1306_DISPLAYOFF); // switch the display off
   }  
@@ -550,6 +489,135 @@ sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_sto
 
 }
 
+
+
+void drop_screen(){
+  if(options_select_mode == 0){ // main options menu
+  // rect loop
+  for(int i =0 ;i<=4 ; i++){
+    if(i==block_cursor){  // fill the rect white when cursor passes
+      display.fillRect(0,16*i,110,16,WHITE);
+    }
+    else{
+      display.drawRect(0,16*i,110,16,WHITE);}
+      }
+  int options_inner_counter = 0;   // internal var only , for inverting text color
+  //text loop
+  for(int i=5;i<=50;i+=15){
+     display.setCursor(9,i+1);
+     if(options_inner_counter == block_cursor){ //when cursor passes make rect text black
+      display.setTextColor(BLACK);
+     }
+     else{
+      display.setTextColor(WHITE);
+     }
+    display.print(options_list[options_outer_counter][options_inner_counter]);  // print option labels
+    options_inner_counter++;  // print next label inside the same page
+    }
+  
+  
+  for(int i=0 ; i <=64 ; i+=8){   // the dots
+    display.fillRect(122,i,2,2,WHITE);
+          }
+// move up
+  if(up == "pressed"){
+    if(options_outer_counter + block_cursor != 0){  //for not going outside the screen
+    block_cursor --;}// move up
+
+
+    if(block_cursor == -1  && scroll_bar_place !=1){  // change page
+      block_cursor = 3; //the last option of the previous page
+    scroll_bar_place -= 10; // change the scroll_bar
+    options_outer_counter--;} // change page
+  }
+
+// move down (same way)
+  if(down == "pressed"){
+    if(options_outer_counter == 3 && block_cursor ==3){}
+    else{
+    block_cursor ++ ;}
+    if(block_cursor == 4  && scroll_bar_place != 31 && options_outer_counter != 4){
+      block_cursor = 0;
+    scroll_bar_place += 10; 
+    options_outer_counter++;}
+  }
+  display.fillRoundRect(120,scroll_bar_place,5,20,5,WHITE);} // print the actual scroll bar
+  
+
+  if(selecT == "pressed" && options_outer_counter == 0 && block_cursor == 0 && options_select_mode == 0){ //entering the first option
+    options_select_mode = 1;  // each one represents an option 
+    last_option_select_time = millis(); // for not regestring multiple presses
+  }
+ 
+  
+
+
+
+
+
+
+// first option menu (end & upload)
+  if(options_select_mode == 1){
+    display.setTextColor(WHITE, BLACK);
+    bool done_uploading = false;
+    time_critical = true ;
+
+
+
+
+
+
+
+
+
+
+
+    display.clearDisplay();
+    display.setCursor(5,0);
+    display.setTextSize(2);
+    display.print("END OF DAY");
+    display.setTextSize(1);
+    display.setCursor(0,20);
+    display.print("Server : 192.168.1.11");
+     display.setCursor(20,35);
+     display.print("the day : ");
+     display.print(rtc.getTime("%d"));
+     int activity_print_counter = 0;
+    for(int i = 0; i<4 ; i++){
+      for(int j =0 ; j<12 ; j++){
+          post(i,j);
+          display.setCursor(20,55);
+         char uplaod_progress_message[20] = "";
+         display.print("uploaded ");
+         display.print(activity_print_counter);
+         display.print("/52");
+          display.print(uplaod_progress_message);
+          display.display();
+          activity_print_counter ++ ;
+      }
+    }
+    done_uploading = true;
+    display.display();
+    
+   if((selecT == "pressed" && millis() > last_option_select_time + 2000) || done_uploading == true){
+    time_critical = false ;
+    options_select_mode = 0;
+    last_option_select_time = millis();
+  }
+  
+  }
+
+
+
+
+
+
+
+
+
+
+}
+
 void setup() {
   sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);  // for initilizing the counter string
 
@@ -557,7 +625,7 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
   display.setTextSize(1);
-  display.setTextColor(WHITE);
+  display.setTextColor(WHITE,BLACK);
   display.setCursor(0,0);
 
 
@@ -574,8 +642,9 @@ void setup() {
 
  
    xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
-if(WiFi.status() == WL_CONNECTED){
-    web_server();
+   if(WiFi.status() == WL_CONNECTED && server_started == false){
+   web_server();
+   server_started = true ;
    }
 
 }
@@ -603,13 +672,12 @@ if(selecT == "long_pressed" ){ //this is for entering the grid mode or main scre
   }
 }
 
-
 if (select_mode == 1){
   select_mode = 0;
   grid_navigiation(); // the grid navigiation & selection & invertion function
 }
 else if(select_mode == 0){
-  main_screen(chosen_value);
+  main_screen();
   if(selecT == "pressed" && (select_mode == 0 || select_mode == 1) && chosen_value != "Nothing"){ // pressing sclect while screen is off doesnt change pause value (select_mode 3)
     if(paused == false){
       paused = true;
@@ -620,7 +688,6 @@ else if(select_mode == 0){
   }
 }
 else if(select_mode == 4) {
-  //Serial.print("drop");
   display.clearDisplay();
   drop_screen();
 } 
@@ -628,9 +695,6 @@ else if(select_mode == 4) {
 if(WiFi.status() != WL_CONNECTED && millis() > connection_begin + 3600000){ // if wifi isnt connected , try to connect every 1 hour
   connect_wifi();
 }
-
-
- 
  
  if(down == "long_pressed" && select_mode == 0){
   select_mode = 4;
@@ -640,11 +704,13 @@ if(WiFi.status() != WL_CONNECTED && millis() > connection_begin + 3600000){ // i
  }
 
 
- 
-//Serial.println(select_mode);
-
 screen_off();
 
+if(WiFi.status() == WL_CONNECTED && server_started == false){
+   web_server();
+   server_started = true ;
+}
+   
 display.display();
 }
  
