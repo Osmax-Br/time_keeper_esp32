@@ -190,15 +190,14 @@ void post(int page , int activity) { // for pushing the data into the sqlite dat
      
      char post_message[500] ; //storing the post message                                                                                                                                                                                                                                //rtc.getTime("%I:%M:%S %p %a %d/%m")
      // should change the values in the next line to varaibles
-     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%i&activity_date_day_number=%i&activity_date_weekday=%s&activity_date_hour=%i&activity_date_minute=%i&activity_date_year=%i",str[page][activity],data_storage[page][activity][2],data_storage[page][activity][1],data_storage[page][activity][0],rtc.getTime("%m").toInt(),rtc.getTime("%d").toInt(),rtc.getTime("%a"),rtc.getTime("%H"),rtc.getTime("%M").toInt(),rtc.getTime("%Y").toInt());
+     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%s&activity_date_day_number=%s&activity_date_weekday=%s&activity_date_hour=%s&activity_date_minute=%s&activity_date_year=%s",str[page][activity],data_storage[page][activity][2],data_storage[page][activity][1],data_storage[page][activity][0],rtc.getTime("%m"),rtc.getTime("%d"),rtc.getTime("%a"),rtc.getTime("%H"),rtc.getTime("%M"),rtc.getTime("%Y"));
+     Serial.println(post_message);
       int httpResponseCode = http.POST(post_message);   
       if(httpResponseCode>0){
   
     String response = http.getString();  //Get the response to the request
-    Serial.println(response);
-    }else{
-  
-}
+   // Serial.println(response);
+    }
       
       http.end();
     }}
@@ -561,6 +560,12 @@ void drop_screen(){
     display.setTextColor(WHITE, BLACK);
     bool done_uploading = false;
     time_critical = true ;
+    bool chose_date = false;
+    if(chose_date == false){
+      String date = get();
+      Serial.print(date);
+      chose_date = true ;
+    }
 
 
 
@@ -570,8 +575,7 @@ void drop_screen(){
 
 
 
-
-
+    if(chose_date == true){
     display.clearDisplay();
     display.setCursor(5,0);
     display.setTextSize(2);
@@ -596,7 +600,8 @@ void drop_screen(){
           activity_print_counter ++ ;
       }
     }
-    done_uploading = true;
+    done_uploading = true;}
+
     display.display();
     
    if((selecT == "pressed" && millis() > last_option_select_time + 2000) || done_uploading == true){
