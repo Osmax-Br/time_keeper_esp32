@@ -1,175 +1,266 @@
-
-#include "ESPAsyncWebServer.h"
-#include <ArduinoJson.h>
-#include <HTTPClient.h>
 #include <Arduino.h>
-//#include <ETH.h>
+#include "ESPAsyncWebServer.h"
+#include <press.h> // for multiple buttons regestration
+//#include <ArduinoJson.h>
+#include <HTTPClient.h>
 #include <WiFi.h>
-//#include <WiFiAP.h>
 #include <WiFiClient.h>
-//#include <WiFiGeneric.h>
-//#include <WiFiMulti.h>
-//#include <WiFiScan.h>
 #include <WiFiServer.h>
-//#include <WiFiSTA.h>
-//#include <WiFiType.h>
-#include <WiFiUdp.h>
-#include <Keypad.h>
-#include <NTPClient.h>
-#include <SPI.h>
-#include <Wire.h>
-#include <WiFiUdp.h>
+//#include <WiFiUdp.h>
+//#include <NTPClient.h>
+//#include <SPI.h>
+//#include <Wire.h>
+//#include <WiFiUdp.h>
+#include "html.h" // the website code
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include "ThingSpeak.h"
-#include "html.h" 
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <sqlite3.h>
-#include <SPI.h>
-//#include <FS.h>
-//#include "SD.h"
-//#include "sd_card_core.h"
-#include <IRremote.h>
-#define SD_CS 23
-#define SD_SCK 17
-#define SD_MOSI 12
-#define SD_MISO 13
+#include <ESP32Time.h> // for using the internal rtc
+/*
+
+INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_passed,activity_date_month,activity_date_day_number,activity_date_weekday,activity_date_hour,activity_date_minute)
+      VALUES ('Paul', 32, 32, 32 , 1 ,1 , "wed" ,1 ,1 );
+*/
+//**********************************************
+
+//oled screen init
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+int last_time_screen_on = 0;
+bool time_critical = false ; // for not turning the screen off while uploading
+
+//************************************************
+//ui vars
+String chosen_value = "Nothing"; //the chosen value from the grid
+int select_mode = 0 ; //for maniging selection ways
+int filled_rect = -1 ; //for inverting text
+int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
+const int pages = 4; // ui pages number
+int current_page = 0; // for navigation
+String str[pages][12] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study"},
+{"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec"},
+{"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/"},
+{"/","/","/","/","/","/","/","/","/","/","/","/"}};
+int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},{42,17,43,18},{84,17,43,18}},{{0,33,43,17},{42,33,43,17},{84,33,43,17}},{{0,49,43,15},{42,49,43,15},{84,49,43,15}}};  //the data of each rectangular in the grid eg: width,height,x,y
+int lastpress,press_state = 0; //for button class
+int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
+
+//************************************************************
+// rtc vars
+
+ESP32Time rtc(3600); // utc time offset , here in Syria it is 1 hour = 3600 sec
+bool rtc_time_updated = false;  // for not updating the time twice from the internet
+int last_rtc_update = 0;
+
+
+//**************************************************************
+//network credentials
+const char *ssid     = "lemone"; 
+const char *password = "Hta87#Mi00";
+// for setting specific ip address
 IPAddress local_IP(192, 168, 1, 199); //192.168.1.199
 IPAddress gateway(192, 168, 1, 1);
 IPAddress subnet(255, 255, 0, 0);
 IPAddress primaryDNS(8, 8, 8, 8);   //optional
 IPAddress secondaryDNS(8, 8, 4, 4); //optional
-AsyncWebServer server(80);
+int connection_begin = 0; //knowing the last time the device attempted to connect to wifi
 
-// Replaces placeholder with DHT values
-String serverName = "http://codeforces.com/api/contest.list";
-unsigned long lastTime_cf = 0;
-int temp_cf[11];
-int ContestTime [9] = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
-String ContestDiv [9] = {"div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1","div -1"};
-String ContestPhase [9] = {"na","na","na","na","na","na","na","na","na"};
-String irkey = "";
-String irCode[4][2] = {{"202b04f","status"},{"2026897","pause"},{"202e817","resume"},{"20250af","upload"}};
-int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}};
-const int activities = 4;
-String str[activities][13] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study","Nothing"},
-{"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec","Nothing"},
-{"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/","Nothing"},
-{"/","/","/","/","/","/","/","/","/","/","/","/","Nothing"}};
-const long utcOffsetInSeconds = 7200+3600;
-int hours=0;
-String day = "???";
-int minutes = 0;
-int seconds = 0;
-String year = "0000";
-String dayStamp = "00-00";
-char amPm;
-char daysOfTheWeek[7][12] = {"Sun", "Mon", "Tue", "Wed", "Thr", "Fri", "Sat"};
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
-String formattedDate;
-const char *ssid     = "phb";
-const char *password = "phb@1973";
-#define ROW_NUM     4
-#define COLUMN_NUM  4
-int chosen = -1;
-int key_num = -48;
-char keys[ROW_NUM][COLUMN_NUM] = {
-  {'1', '2', '3', 'A'},
-  {'4', '5', '6', 'D'},
-  {'7', '8', '9', 'C'},
-  {'*', '0', '#', 'B'}
-};
-unsigned long myChannelNumber = 1;
-const char * myWriteAPIKey = "1B8PQM7MAYAT0WIO";
-const int RECV_PIN = 15;
-IRrecv irrecv(RECV_PIN);
-decode_results results;
-byte pin_rows[ROW_NUM]      = {32, 18 , 5, 25};
-byte pin_column[COLUMN_NUM] = {16, 4, 0, 2};
-int pressA,pressB,pressD,counter_var,pressStar,square,saved,startTimer,lastPress,lastUpdate =0 ;
-int start_hour,start_minute,start_second,end_hour,end_minutes_end_second = 0;
-int pressed = -1;
+
+
+//***************************************************************
+//buttons vars
+//making button clases , each button is a spereate object
+button_press button_up(35);
+button_press button_down(34);
+button_press button_right(33);
+button_press button_left(32);
+button_press button_selecT(27);
+int last_press_time = 0; // for ignoring multiple presses at the same moment
+String up,down,right,left,selecT = "" ; // strores button values
+int up_bounce,down_bounce,righ_bounce,left_bounce,selecT_bounce = 0;  // stores bounce press values
+
+//****************************************************************
+// internal rtc timer vars
+
+hw_timer_t * timer = NULL; //setting up the timer
+volatile int seconds_passed; // storing the counter seconds in SRAM for faster execution
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+volatile int minutes_passed,hours_passed = 0; //storing the counter values
+char time_counter_string[100] ;  // storing the formatted counter time
+volatile bool paused = true ; // for pausing timer
+
+
+
+//**************************************************************
+//storage vars
+int data_storage[4][12][3] ;
+int data_storage_index = 0;
+
+
+//****************************************************************
+// web server vars
+bool server_started = false ;
 WiFiClient  clientt;
-Keypad keypad = Keypad( makeKeymap(keys), pin_rows, pin_column, ROW_NUM, COLUMN_NUM );
-String wrd;
-hw_timer_t * timer = NULL;
-long sec,minu,hor;
-unsigned long lastTime = 0;
-unsigned long timerDelay = 30000;
-String new_sec,new_minu,new_hor = "00";
-int saving = -1;
-String saved_data[20];
-const char* database_init = "CREATE table if not exists times(begin_hour int,  begin_minute int,  end_hour int,  end_minute int,  hours int,  minutes int,  seconds int,chosen string);";
+AsyncWebServer server(80);
+String timer_web_var(){
+  return time_counter_string;
+}
 
+String chosen_value_web_var(){
+  return chosen_value;
 
-String timer_var(){
- return String(new_hor)+":"+String(new_minu)+":"+String(new_sec);
+}
+String pause_web_var(){
+  if(paused == true){
+    if(data_storage[current_page][data_storage_index][0] == 0 && data_storage[current_page][data_storage_index][1] && data_storage[current_page][data_storage_index][2]){
+      return "Start";}
+    else{  
+    return "Resume";}
   }
-String chosen_var(){
-    if(chosen==-1){
-      return "Nothing";
-    }
-  else{
-    return str[square][chosen] ;
-    }}
-String pause_var(){
-  if(startTimer==1){
+  else if(paused == false ){
     return "Pause";
-    }
-  else if(startTimer == 2){
-    return "Resume";
-    }
-   else{
-    return "Start";
-    }}
-String processor(const String& var){
-  //Serial.println(var);
+  }
+ else{
+  return "ERROR !";
+ } 
+}
+String var_processor(const String& var){
   if(var == "Timer"){
-    return timer_var();
+    return timer_web_var();
   }
   else if(var == "Chosen_server"){
-    return chosen_var();
+    return chosen_value_web_var();
     }
   else if(var == "Pause"){
-    return pause_var();
+    return pause_web_var();
     }  
   return String();
 }
+//**************************************************************
+//multi-tasking
+TaskHandle_t ntp_time;  // getting the tine from internet 
+
+
+//************************************************************
+// sql vars
+const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php"; //must add year to database
+
+
+
+//********************************************************
+//drop screen vars
+String options_list[4][4] = {{"End day&upload","change location","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","",""},{"","","",""}};
+int scroll_bar_place = 1;
+int options_outer_counter = 0;
+int block_cursor = 0;
+int options_select_mode = 0 ;
+// 0 = menu , 1 = end&upload ....etc
+int last_option_select_time = 0;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// must add last_time var
+void post(int page , int activity) { // for pushing the data into the sqlite data base on the pc
+// on pc I used wimp to host a server
+ 
+ // http post
+    if(WiFi.status()== WL_CONNECTED){ 
+      HTTPClient http;
+      
+   
+      http.begin(sql_server);
+      	
+      http.addHeader("Content-Type", "application/x-www-form-urlencoded"); //Specify content-type header
+     
+     char post_message[500] ; //storing the post message                                                                                                                                                                                                                                //rtc.getTime("%I:%M:%S %p %a %d/%m")
+     // should change the values in the next line to varaibles
+     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%s&activity_date_day_number=%s&activity_date_weekday=%s&activity_date_hour=%s&activity_date_minute=%s&activity_date_year=%s",str[page][activity],data_storage[page][activity][2],data_storage[page][activity][1],data_storage[page][activity][0],rtc.getTime("%m"),rtc.getTime("%d"),rtc.getTime("%a"),rtc.getTime("%H"),rtc.getTime("%M"),rtc.getTime("%Y"));
+     Serial.println(post_message);
+      int httpResponseCode = http.POST(post_message);   
+      if(httpResponseCode>0){
+  
+    String response = http.getString();  //Get the response to the request
+   // Serial.println(response);
+    }
+      
+      http.end();
+    }}
+
+String get(){
+  String return_var = "";
+if(WiFi.status()== WL_CONNECTED){
+      HTTPClient http;
+
+      String serverPath = sql_server;
+      
+      // Your Domain name with URL path or IP address with path
+      http.begin(serverPath.c_str());
+      // Send HTTP GET request
+      int httpResponseCode = http.GET();
+      if (httpResponseCode>0) {
+      
+        return_var = http.getString();
+      
+      }
+      else {
+        
+      }
+      // Free resources
+      http.end();
+    }
+
+  return return_var;
+
+}
+
+
+
+
+
 void web_server(){
+  
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
+    request->send_P(200, "text/html", index_html, var_processor);
   });
   
   server.on("/timer", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/plain", timer_var().c_str());
+    request->send_P(200, "text/plain", timer_web_var().c_str());
   });
    server.on("/chosen_server", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/plain", chosen_var().c_str());
+    request->send_P(200, "text/plain", chosen_value_web_var().c_str());
   });
     server.on("/Pause", HTTP_GET, [] (AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "ok");
   });
   server.on("/btn", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/plain", pause_var().c_str());
+    request->send_P(200, "text/plain", pause_web_var().c_str());
   });
   server.on("/Resume", HTTP_GET, [] (AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "ok");
   });
    server.on("/PauseBtn", HTTP_GET, [] (AsyncWebServerRequest *request) {
-    if(pressStar==0){
-      pressStar=1;
-      counter_var=2;
+    if(paused==true && chosen_value != "Nothing"){
+        paused = false;
       }
-    else if(pressStar==1){
-      pressStar=0;
-      counter_var=1;
-      }  
+    else if(paused == false){
+        paused = true;
+      } 
     
     request->send(200, "text/plain", "ok");
   });
@@ -180,25 +271,17 @@ void web_server(){
     if (request->hasParam("input1")) {
       inputMessage = request->getParam("input1")->value();
       inputParam = "input1";
-      
-    if(chosen < 12 && chosen != -1 && chosen != 12 ){
-     chosen +=1 ;
-    }
-    else if(chosen == -1 || chosen == 12){
-     for(int i =0 ; i<12 ;i++){
+     int chosen_value_index = 0; // for chosing the value index from str array (activity) 
+      for(int i =0 ; i<12 ;i++){
       if(str[3][i] == "/"){
-        chosen = i;
+        chosen_value_index = i;
         break;
-     }
-     else{
-     chosen = 0;
      }}
-    }
-    else{
-      chosen = 0;
-    }
-    square = 3 ;
-    str[3][chosen] = inputMessage;}
+    // must put semaphore
+    current_page = 3 ;
+    str[3][chosen_value_index] = inputMessage;
+    chosen_value = str[3][chosen_value_index];
+      }
     request->send(200, "text/html", " <meta http-equiv='refresh' content='0; URL=http://192.168.1.199/'> ");
   });
  
@@ -208,486 +291,431 @@ void web_server(){
 
 
 
-void drawer(){
-  display.drawLine(0, 10, display.width() - 1, 10, WHITE);  
+
+void get_ntp_time( void * pvParameters ){ //get time data from ntp
+    for(;;) {
+    if((WiFi.status() == WL_CONNECTED && rtc_time_updated == false) || (WiFi.status() == WL_CONNECTED && rtc_time_updated == true && millis() > last_rtc_update + 86400)){
+    // getting the time from ntp server
+  configTime(7200,0, "pool.ntp.org");   // utc offset , daylight saving , ntp server
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo)){
+    rtc.setTimeStruct(timeinfo); // set the rtc time from ntp
+    rtc_time_updated = true ; // dont reconntect to ntp servers
+    last_rtc_update = millis();
   }
+      
 
-
-
-        
-
-void draw_grid() {
-  display.drawLine(0, 0, 0, display.height() - 1, WHITE);
-  display.drawLine(41, 0, 41, display.height() - 1, WHITE);
-  display.drawLine(81, 0, 81, display.height() - 1, WHITE);
-  display.drawLine(127, 0, 127, display.height() - 1, WHITE);
-  for (int i = 0; i <= 64 - 15; i += 16) {
-    display.drawLine(0, i, display.width() - 1, i, WHITE);
-  }
-  display.drawLine(0, 63, display.width() - 1, 63, WHITE);}
-  
-void print_label(int square) {
-  display.setTextSize(1);
-  draw_grid();
-  for(int i=0;i<12;i++){  
-  int x = table[i][0];
-  int y = table[i][1];  
-  display.setCursor(2 + 41 * x, 4 + 16 * y);
-  display.setTextColor(WHITE);
-  display.print(str[square][i]);
+    }
   }
 }
 
-void keypress() {
-display.setCursor(0, 0);
-char key = keypad.getKey();
 
-if (key) {
-if (key != '*') {
-display.clearDisplay();
-wrd += key;
-display.print(wrd);
-}
-else {
-  
-  display.clearDisplay();
-  int len;
-  len = wrd.length();
-  wrd = wrd.substring(0, len - 1);
-  
-  display.print(wrd);
-}
-display.display();
+
+void IRAM_ATTR onTimer() {      //Defining Inerrupt function with IRAM_ATTR for faster access
+if(paused == false && chosen_value != "Nothing"){
+ portENTER_CRITICAL_ISR(&timerMux); // for stopping other functions of changing this value at the same time
+ data_storage[current_page][data_storage_index][0] ++ ;
+ portEXIT_CRITICAL_ISR(&timerMux);
 }}
 
 
-void edit_key(char key){
-  if(key == '*'){
-  key_num = 10;
+
+void connect_wifi(){
+  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {  // ensuring no error happened
   }
-else if(key == '0'){
-  key_num = 11;  
-}
-else if(key=='#'){
-  key_num = 12;
-}
-else if(key=='?'){
-  key_num = 13;
-  }
-else{
- key_num= key-'0';}
-}
-
-
-void beautiful_int(int sec,int hor,int minu){
-  if(sec<10){
-    new_sec = "0" + String(sec);
-    }
-  else{
-    new_sec = String(sec);
-    }  
-  if(minu<10){
-    new_minu = "0" + String(minu);
-    }
-  else{
-    new_minu = String(minu);
-    }  
-    if(hor<10){
-    new_hor = "0" + String(hor);
-    }
-  else{
-    new_hor = String(hor);
-    }
-  }  
-
-void resume_tone(int ledPin){
-  int ledState = LOW;             // ledState used to set the LED
-  unsigned long previousMillis = 0;
-  const long interval = 80;
-  for(int i =0 ; i<4 ;){
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;
-    if (ledState == LOW) {
-      ledState = HIGH;
-    } else {
-      ledState = LOW;}
-    digitalWrite(ledPin, ledState);
-    i++;}}
-  }
-
-void pause_tone(int ledPin){
-  int ledState = 0;             // ledState used to set the LED
-  unsigned long previousMillis = 0;
-  const long interval = 220;
-  for(int i = 0 ; i<2 ; ){
-  unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= interval) {
-    previousMillis = currentMillis;
-    if (ledState == 0) {
-      ledState = 1;
-    } else {
-      ledState = 0;}
-      i++;
-    digitalWrite(ledPin, ledState);}}
-  }  
-
-  void get_ir_data(){
-if (irrecv.decode(&results)){
-        irkey = String(results.value, HEX); 
-       // Serial.println(irkey);
-        //Serial.println(results.value, HEX);
-        irrecv.resume();
-  } 
-  if(irkey == irCode[0][0]){
-    irkey = "";
-    if(startTimer == 1){
-      resume_tone(27);
-    }
-    else{
-      pause_tone(27);
-    }
-   }
-   else if(irkey == irCode[1][0]){
-     irkey = "";
-     pause_tone(27);
-     //startTimer = 2;
-     pressStar=1;
-     counter_var=2;
-   }
-   else if(irkey == irCode[2][0]){
-     irkey = "";
-     resume_tone(27);
-    // startTimer = 1;
-    pressStar=0;
-    counter_var=1;
-   }
-
-  }
-
-void cf_data(){
-  /*
-      HTTPClient httpc;
-      // Send HTTP GET request
-      httpc.useHTTP10(true);
-      httpc.begin(serverName);
-      int httpResponseCode = httpc.GET();
-      Serial.println(httpResponseCode);
-      if (httpResponseCode>0) {
-        Serial.println("cf started 4");
-        Serial.print("HTTP Response code: ");
-        Serial.println(httpResponseCode);
-        StaticJsonDocument<512> filter;
-        filter["result"][0]["phase"] = true;
-        filter["result"][0]["name"] = true;
-        filter["result"][0]["startTimeSeconds"] = true;
-        DynamicJsonDocument doc(1024);
-        deserializeJson(doc, httpc.getStream() , DeserializationOption::Filter(filter));
-        for(int i=0 ; i<9 ; i++){
-        String s = doc["result"][i]["name"].as<String>();
-        s = s.substring( int(s.length()) - 7, int(s.length())-1);
-        ContestDiv[i] = s;
-        ContestPhase[i] = doc["result"][i]["phase"].as<String>();
-        ContestTime[i] = doc["result"][i]["startTimeSeconds"].as<int>();
-        }}
-      // Free resources
-      httpc.end();
-      */
-  }
-
-void main_screen(int chosen,int hor,int minu,int sec,char key,String new_hor,String new_minu,String new_sec){
- display.clearDisplay();
-   display.setCursor(0,40+15);
-  display.setTextSize(1);
-  display.print("choice: ");
-  if(chosen==-1){
-    display.print("Nothing");
-    }
-  else{
-    display.print(str[square][chosen]);
-    } 
- String ampm;
- formattedDate = timeClient.getFormattedDate();
- int splitT = formattedDate.indexOf("T");
- dayStamp = formattedDate.substring(5, splitT);
- hours=timeClient.getHours();
- day = daysOfTheWeek[timeClient.getDay()];
- minutes = timeClient.getMinutes();
- seconds = timeClient.getSeconds();
- year = formattedDate.substring(0,4);
- if(hours>12){
-  hours-=12;
-  ampm = "Pm";}
- else{
- ampm = "Am";
- }
- if(year == "1970"){
-  hours = minutes = seconds = 0;
-  day = "???";
-  dayStamp = "0-0";
-  }
-
- int clearr = millis();
- 
- 
- 
- display.setCursor(17,0+15);
- display.setTextSize(2);
- char bufffer[40];
- sprintf(bufffer, "%s:%s:%s",new_hor,new_minu,new_sec);
-
-if (key=='B' and pressB==0) {
-  start_hour = hours;
-  start_minute = minutes;
-  start_second = seconds;
-  counter_var=1;
-  pressB=1;
-  startTimer = 1;
-  key = '1';
-  pressed+=1;
-}
-else if(key=='B' and pressB==1){
-display.clearDisplay();
-display.display();
-pressB=0;
-counter_var=0;
-key = '1';
-}
-
-if(key=='*' and pressStar==0){
-display.clearDisplay();
-display.display();  
-pressStar=1;
-counter_var=2;
-key = '1';
-  }
-else if(key=='*' and pressStar==1){
-  pressStar=0;
-  counter_var=1;
-  }  
-if(counter_var==0){
-  if(pressed >= 0 and chosen!=-1){
-  display.clearDisplay();
-  display.print("Saving..");
+  display.print("connecting.......");
   display.display();
-  if ((millis() - lastTime) > timerDelay){
-    char datum[200];
-    sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,new_hor,new_minu,new_sec,hours,minutes,seconds);
-    if(WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){
-    int x = ThingSpeak.writeField(myChannelNumber, 1,datum, myWriteAPIKey);
-    
-    if(x == 200){
-       display.println("saved!"); 
-       delay(500);}
-    else{
-      
-    }}
-    else{
-      saving+=1;
-      char datum[200];
-      sprintf(datum, "%s/%s/%i:%i:%i/%i:%i:%i/%i:%i:%i",str[square][chosen],dayStamp,start_hour,start_minute,start_second,new_hor,new_minu,new_sec,hours,minutes,seconds);
-      saved_data[saving]=datum;
-      display.print("saved to var");
-      delay(500);
-      }}
-      lastTime = millis();
-     pressed = -1;
-      }
-  else{
-  display.print("00:00:00");}
-  startTimer = 0;
-
-}
-else if(counter_var==1){
-  display.print(bufffer);
-  startTimer = 1;
-}
-
-else if(counter_var==2){
-  display.print(bufffer);
-  startTimer = 2;
-}
-
- display.setTextSize(1);
- display.setCursor(0,20+15);
- char buffer[40];
- sprintf(buffer,"%i:%i:%i %s %s %s",hours,minutes,seconds,ampm,day,dayStamp);
- display.print(buffer);
- int savings = saving;
- if(saving>-1 and WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){
-  display.print("saving");
-      for(int i=0;i<savings +1;){
-        if((millis() - lastTime ) > timerDelay){
-      int x = ThingSpeak.writeField(myChannelNumber,1,saved_data[i], myWriteAPIKey);
-      if(x==200){
-       i++;
-       saving -=1;
-       }
-       else{
-        }
-       lastTime = millis();
-       }
-      }
-      }
- if(WiFi.status() != WL_CONNECTION_LOST && WiFi.status()== WL_CONNECTED){ 
-  if(lastUpdate+1200000<millis()){
- timeClient.update();
- cf_data();
- lastUpdate = millis();
- }
- else if(millis()<120000){
-  timeClient.update();
-  if(millis() > 60000){
-  cf_data();}
-  }
-  }}
-
-
-
-
-void cf_div_screen(String upcoming,String contest_date,String ratingAndProblems , int hor , int minu , int sec){
-display.setCursor(30,1);
-display.setTextSize(2);
-display.print(upcoming);
-display.setTextSize(1);
-display.setCursor(20,20);
-display.print(contest_date);
-display.setTextSize(2);
-display.setCursor(10,35);
-display.print("00:00:--");
-display.setTextSize(1);
-display.setCursor(0,56);
-display.print("rating: 837 || x left");
-}  
-
-
-
-
-
-
-void IRAM_ATTR onTimer(){
-  if(startTimer == 1){
-  sec+=1;
-  if(sec>=59){
-    sec=0;
-    minu++;
-    }
-  if(minu>=59){
-    minu=0;
-    hor++;
-    } }
-   else if(startTimer ==0){
-   sec = 0;
-   hor =0;
-   minu = 0;
-   } 
-   beautiful_int(sec,hor,minu);
- } 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-void setup() {
-    Serial.begin(9600);
-    
-if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-   
-  }
-  int connection_begin = millis();
+  connection_begin = millis();  //for timing out
      if(WiFi.status() != WL_CONNECTED){
       while(WiFi.status() != WL_CONNECTED && millis() <= connection_begin+20000){
-        WiFi.begin(ssid, password);  
+        WiFi.begin(ssid, password);
         break;    
       } 
      
     }
+
+
+}
+
+void draw_grid(){ //used this method for easier tex inverting 
+  for(int i = 0 ; i<4 ; i++){
+    for(int j=0 ; j<3 ; j++){
+    display.drawRect(rect_cord[i][j][0],rect_cord[i][j][1],rect_cord[i][j][2],rect_cord[i][j][3], WHITE);
+  }}
+}
+
+
+
+
+void print_label(int current_page,int filled_rect_x , int filled_rect_y) { //printing the activity inside its box in the grid
+  draw_grid();
+  display.setTextSize(1);
+  int i2=0; //this is to adjust the y shift while printing labels
+  for(int i=0;i<12;i++){  
+  int _x = table[i][0]; // getting the coordintaes of each rectangular
+  int _y = table[i][1];  
+  if(i==9){
+    i2 = -2;  //adjusting y shift
+  }
+  display.setCursor(4 + 41 * _x,3 + (17 * _y) +i2); //setting writing cursor
+  if(_x == filled_rect_x && _y==filled_rect_y){ //&& selecT_bounce == 1){   //this is for inverting the text color while selecting
+  display.setTextColor(BLACK);
+  display.print(str[current_page][i]);} //printing the labels
+  else{
+ display.setTextColor(WHITE);
+  display.print(str[current_page][i]);
+  }
+  }
+}
+
+void grid_navigiation(){
+    select_mode = 1;
+    int x = cursor[0]; // getting current cursor coordintes
+    int y = cursor[1];
+  if(right == "pressed"){
+    if(cursor[0] + 1 != 3){ //this is for checking the the cursor doesnt go out of the screen (stops at the edges)
+    cursor[0] = cursor[0] + 1; // adjusting x cursor
+    display.clearDisplay(); // clearing display for interferance
+  }}
+
+   if(left == "pressed"){
+    if(cursor[0] -1  != -1){
+    cursor[0] = cursor[0] - 1; 
+    display.clearDisplay();
+  }} 
+   if(up == "pressed"){
+    if(cursor[1] -1  != -1){
+    cursor[1] = cursor[1] - 1; 
+    display.clearDisplay();
+  }} 
+   if(down == "pressed"){
+    if(cursor[1] +1  != 4){
+    cursor[1] = cursor[1] + 1 ; 
+    display.clearDisplay();
+  }} 
+    display.clearDisplay(); //without it the lables will over lap
+    display.fillRect(rect_cord[y][x][0],rect_cord[y][x][1],rect_cord[y][x][2],rect_cord[y][x][3], WHITE); //making the rectangular white (needed to swap the x&y because of typing error)
+
+
+
+if(selecT == "pressed"){ //the action which happens when something is selected
+int x = cursor[0]; //the same code used in the function print_label
+int y = cursor[1]; //the code is mainly to change from coordinates in cusor to a number which allows us to know the value selected
+
+for(int i=0 ; i<12 ; i++){
+  int x1 = table[i][0];
+  int y1 = table[i][1];
+  if(x1==x && y==y1){
+    
+    chosen_value = str[current_page][i]; //the Actual selected value 
+    data_storage_index = i ; //for knowing wher to store time data
+    select_mode = 0;
+    break;
+  }
+}
+
+}
+
+if(right == "long_pressed" && current_page != 3){ //for flipping pages and ensuring that an error doesnt happen
+  current_page +=1 ;   // change page
+}
+if(left == "long_pressed" && current_page != 0){
+  current_page -=1 ;   // change page 
+}
+
+print_label(current_page,cursor[0],cursor[1]); // printing the lables
+}
+
+
+
+void main_screen(){
+ display.clearDisplay();
+ display.setTextColor(WHITE);
+  display.setCursor(0,40+15);
+  display.setTextSize(1);
+  display.print("choice: ");
+  if(chosen_value=="Nothing"){
+    display.print("Nothing");
+    }
+  else{
+    display.print(chosen_value);
+    } 
+  display.setCursor(17,0+15);
+  display.setTextSize(2);
+  display.print(time_counter_string);
+  display.setTextSize(1);
+  display.setCursor(0,20+15);
+  if(rtc_time_updated == true){
+ display.print(rtc.getTime("%I:%M:%S %p %a %d/%m")); //printing current time from the rtc
+  }
+  else{
+    display.print("Error! cant get time"); 
+  }
+  display.display();
+}
+
+
+void screen_off(){
+
+ if((right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed")){  // wake the screen up
+  //for not interfering with the grid selection
+  display.ssd1306_command(SSD1306_DISPLAYON);
+  if(select_mode == 3){
+  select_mode = 0;    // back to main screen
+  }
+  last_time_screen_on = millis();
+  }  
+if(last_time_screen_on+30000<millis() && time_critical == false){  // change the auto display_off time 
+  select_mode = 3; // that means the screen is off
+  display.ssd1306_command(SSD1306_DISPLAYOFF); // switch the display off
+  }  
+}
+
+
+void counter_formatting(){
+  
+if(data_storage[current_page][data_storage_index][0] > 59){
+  portENTER_CRITICAL(&timerMux);
+  data_storage[current_page][data_storage_index][0] = 0;
+  portEXIT_CRITICAL(&timerMux);
+  data_storage[current_page][data_storage_index][1] ++ ;
+}
+if(data_storage[current_page][data_storage_index][1] == 59){
+  data_storage[current_page][data_storage_index][1] = 0;
+  data_storage[current_page][data_storage_index][2] ++ ;
+}
+sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);
+
+}
+
+
+
+void drop_screen(){
+  if(options_select_mode == 0){ // main options menu
+  // rect loop
+  for(int i =0 ;i<=4 ; i++){
+    if(i==block_cursor){  // fill the rect white when cursor passes
+      display.fillRect(0,16*i,110,16,WHITE);
+    }
+    else{
+      display.drawRect(0,16*i,110,16,WHITE);}
+      }
+  int options_inner_counter = 0;   // internal var only , for inverting text color
+  //text loop
+  for(int i=5;i<=50;i+=15){
+     display.setCursor(9,i+1);
+     if(options_inner_counter == block_cursor){ //when cursor passes make rect text black
+      display.setTextColor(BLACK);
+     }
+     else{
+      display.setTextColor(WHITE);
+     }
+    display.print(options_list[options_outer_counter][options_inner_counter]);  // print option labels
+    options_inner_counter++;  // print next label inside the same page
+    }
+  
+  
+  for(int i=0 ; i <=64 ; i+=8){   // the dots
+    display.fillRect(122,i,2,2,WHITE);
+          }
+// move up
+  if(up == "pressed"){
+    if(options_outer_counter + block_cursor != 0){  //for not going outside the screen
+    block_cursor --;}// move up
+
+
+    if(block_cursor == -1  && scroll_bar_place !=1){  // change page
+      block_cursor = 3; //the last option of the previous page
+    scroll_bar_place -= 10; // change the scroll_bar
+    options_outer_counter--;} // change page
+  }
+
+// move down (same way)
+  if(down == "pressed"){
+    if(options_outer_counter == 3 && block_cursor ==3){}
+    else{
+    block_cursor ++ ;}
+    if(block_cursor == 4  && scroll_bar_place != 31 && options_outer_counter != 4){
+      block_cursor = 0;
+    scroll_bar_place += 10; 
+    options_outer_counter++;}
+  }
+  display.fillRoundRect(120,scroll_bar_place,5,20,5,WHITE);} // print the actual scroll bar
+  
+
+  if(selecT == "pressed" && options_outer_counter == 0 && block_cursor == 0 && options_select_mode == 0){ //entering the first option
+    options_select_mode = 1;  // each one represents an option 
+    last_option_select_time = millis(); // for not regestring multiple presses
+  }
+ 
+  
+
+
+
+
+
+
+// first option menu (end & upload)
+  if(options_select_mode == 1){
+    display.setTextColor(WHITE, BLACK);
+    bool done_uploading = false;
+    time_critical = true ;
+    bool chose_date = false;
+    if(chose_date == false){
+      String date = get();
+      Serial.print(date);
+      chose_date = true ;
+    }
+
+
+
+
+
+
+
+
+
+    if(chose_date == true){
+    display.clearDisplay();
+    display.setCursor(5,0);
+    display.setTextSize(2);
+    display.print("END OF DAY");
+    display.setTextSize(1);
+    display.setCursor(0,20);
+    display.print("Server : 192.168.1.11");
+     display.setCursor(20,35);
+     display.print("the day : ");
+     display.print(rtc.getTime("%d"));
+     int activity_print_counter = 0;
+    for(int i = 0; i<4 ; i++){
+      for(int j =0 ; j<12 ; j++){
+          post(i,j);
+          display.setCursor(20,55);
+         char uplaod_progress_message[20] = "";
+         display.print("uploaded ");
+         display.print(activity_print_counter);
+         display.print("/52");
+          display.print(uplaod_progress_message);
+          display.display();
+          activity_print_counter ++ ;
+      }
+    }
+    done_uploading = true;}
+
+    display.display();
+    
+   if((selecT == "pressed" && millis() > last_option_select_time + 2000) || done_uploading == true){
+    time_critical = false ;
+    options_select_mode = 0;
+    last_option_select_time = millis();
+  }
+  
+  }
+
+
+
+
+
+
+
+
+
+
+}
+
+void setup() {
+  sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);  // for initilizing the counter string
+
+  Serial.begin(115200);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
-  display.setTextSize(0);
-  display.setTextColor(WHITE);
-  timeClient.begin();
-  timer = timerBegin(0, 80, true);  // timer 0, MWDT clock period = 12.5 ns * TIMGn_Tx_WDT_CLK_PRESCALE -> 12.5 ns * 80 -> 1000 ns = 1 us, countUp
-  timerAttachInterrupt(timer, &onTimer, true); // edge (not level) triggered 
-  timerAlarmWrite(timer, 1000000, true); // 1000000 * 1 us = 1 s, autoreload true
-  timerAlarmEnable(timer); // enable
-  ThingSpeak.begin(clientt);
-  web_server();
-  pinMode(19,OUTPUT); 
-  pinMode(27,OUTPUT);  
-  irrecv.enableIRIn();
-  irrecv.blink13(true);
+  display.setTextSize(1);
+  display.setTextColor(WHITE,BLACK);
+  display.setCursor(0,0);
+
+
+
+  timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
+  timerAttachInterrupt(timer, &onTimer, true); 	// Attach interrupt
+  timerAlarmWrite(timer,1000000, true);  		// Match value= 1000000 for 1 sec. delay.
+  timerAlarmEnable(timer);           			// Enable Timer with interrupt (Alarm Enable)
+
+
+  //connecting to wifi , the ip address is 192.168.1.199
+    connect_wifi();
+    display.clearDisplay();
+
+ 
+   xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
+   if(WiFi.status() == WL_CONNECTED && server_started == false){
+   web_server();
+   server_started = true ;
+   }
+
 }
-void loop() { 
-char key = keypad.getKey();  
-if(key){
-  display.ssd1306_command(SSD1306_DISPLAYON);
-  lastPress = millis();
-  }  
-if(lastPress+30000<millis()){
-  display.ssd1306_command(SSD1306_DISPLAYOFF);
-  } 
-if(key == 'C'){
-  if(square==activities-1){
-      square = 0;}
-  else{
-    square+=1;
+
+
+
+
+void loop() {
+counter_formatting();
+// adding the value of each button to a seperate var
+up = button_up.press();
+down = button_down.press();
+right = button_right.press();
+left = button_left.press();
+selecT = button_selecT.press(); // the name is with "T" not "t" due to interferance with another library :p
+// adding the values of bounce press vars
+selecT_bounce = button_selecT.bounce_press(); 
+
+if(selecT == "long_pressed" ){ //this is for entering the grid mode or main screen
+  if(select_mode == 1){
+    select_mode = 0;
+  }
+  else if(select_mode == 0){
+    select_mode = 1;
+  }
+}
+
+if (select_mode == 1){
+  select_mode = 0;
+  grid_navigiation(); // the grid navigiation & selection & invertion function
+}
+else if(select_mode == 0){
+  main_screen();
+  if(selecT == "pressed" && (select_mode == 0 || select_mode == 1) && chosen_value != "Nothing"){ // pressing sclect while screen is off doesnt change pause value (select_mode 3)
+    if(paused == false){
+      paused = true;
     }
-    if(pressA == 1){
-     display.clearDisplay();
-    print_label(square);
-    pressA = 1;
-    key = '?';
-    }}   
-if(key=='A' and pressA!=1 and pressD!=1) {
-  int lastSquare = square;
+  else if(paused == true){
+    paused = false;
+  }  
+  }
+}
+else if(select_mode == 4) {
   display.clearDisplay();
-  print_label(square);
-  pressA=1;
-  key = '?';
-}
-else if(key=='A' and pressA==1){
-display.clearDisplay();
-display.display();
-pressA=0;}
-if(pressA==1){
-edit_key(key);
-if(key_num != -48){
-    chosen = key_num-1;
-  }} 
- if(key=='D' and pressD!=1 and pressA!=1) {
- display.clearDisplay();
-cf_div_screen("Div 3","12/june 05:02" , "rating: 837 || 5 left" , hor , minu , sec);
-display.display();
-pressD=1;
- } 
-else if(key=='D' and pressD==1){
-display.clearDisplay();
-display.display();
-pressD=0;
-
+  drop_screen();
 } 
-if(pressA!=1 and pressD!=1){
-    main_screen(chosen,hor,minu,sec,key,new_hor,new_minu,new_sec);
-   drawer();  
+
+if(WiFi.status() != WL_CONNECTED && millis() > connection_begin + 3600000){ // if wifi isnt connected , try to connect every 1 hour
+  connect_wifi();
+}
+ 
+ if(down == "long_pressed" && select_mode == 0){
+  select_mode = 4;
  }
-get_ir_data();
+ else if(select_mode == 4 && up == "long_pressed"){
+  select_mode = 0;
+ }
 
 
+screen_off();
 
+if(WiFi.status() == WL_CONNECTED && server_started == false){
+   web_server();
+   server_started = true ;
+}
+   
 display.display();
 }
+ 
