@@ -7,7 +7,7 @@ button_press::button_press(int pin){
 }   
 
 String button_press::press(){
-String return_var;   // stores return info
+String return_var ;   // stores return info
 _nowpress = digitalRead(_pin);
   
   if(_nowpress == 1 && _lastpress == 0){ //senses the change of signal (0-->1 and 1-->0 regesters a press)
@@ -17,7 +17,7 @@ _nowpress = digitalRead(_pin);
   if(_lastpress == 1 && _nowpress ==0){
     _lastpress = 0;
     if(millis()- _presstime < 300){ // the duration of the normal press (changing this changes also the duration of long press)
-      if(millis() > last_press_time + 10){ //for ignoring dual presses at the same time
+      if(millis() > last_press_time + 500){ //for ignoring dual presses at the same time
     return_var = "pressed";
     last_press_time = millis(); //updating last time pressed
     }

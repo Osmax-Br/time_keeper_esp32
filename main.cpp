@@ -144,7 +144,7 @@ TaskHandle_t ntp_time;  // getting the tine from internet
 
 //************************************************************
 // sql vars
-const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php"; //must add year to database
+const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php"; 
 
 
 
@@ -158,6 +158,9 @@ int options_select_mode = 0 ;
 // 0 = menu , 1 = end&upload ....etc
 int last_option_select_time = 0;
 
+int get_date_cursor = 0 ; // 0 right , 1 left
+bool got_the_date_from_db = false ;
+String current_get_day_and_month ;
 
 
 
@@ -176,7 +179,7 @@ int last_option_select_time = 0;
 
 
 // must add last_time var
-void post(int page , int activity) { // for pushing the data into the sqlite data base on the pc
+void post(int page , int activity , int day_of_upload , int month_of_upload , int year_of_upload) { // for pushing the data into the sqlite data base on the pc
 // on pc I used wimp to host a server
  
  // http post
@@ -190,13 +193,13 @@ void post(int page , int activity) { // for pushing the data into the sqlite dat
      
      char post_message[500] ; //storing the post message                                                                                                                                                                                                                                //rtc.getTime("%I:%M:%S %p %a %d/%m")
      // should change the values in the next line to varaibles
-     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%s&activity_date_day_number=%s&activity_date_weekday=%s&activity_date_hour=%s&activity_date_minute=%s&activity_date_year=%s",str[page][activity],data_storage[page][activity][2],data_storage[page][activity][1],data_storage[page][activity][0],rtc.getTime("%m"),rtc.getTime("%d"),rtc.getTime("%a"),rtc.getTime("%H"),rtc.getTime("%M"),rtc.getTime("%Y"));
-     Serial.println(post_message);
+     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%s&activity_date_day_number=%s&activity_date_weekday=%s&activity_date_hour=%s&activity_date_minute=%s&activity_date_year=%s",str[page][activity],data_storage[page][activity][2],data_storage[page][activity][1],data_storage[page][activity][0],month_of_upload,day_of_upload,rtc.getTime("%a"),rtc.getTime("%H"),rtc.getTime("%M"),year_of_upload);
+     //Serial.println(post_message);
       int httpResponseCode = http.POST(post_message);   
       if(httpResponseCode>0){
   
     String response = http.getString();  //Get the response to the request
-   // Serial.println(response);
+    Serial.println(response);
     }
       
       http.end();
@@ -215,7 +218,8 @@ if(WiFi.status()== WL_CONNECTED){
       int httpResponseCode = http.GET();
       if (httpResponseCode>0) {
       
-        return_var = http.getString();
+        String payload = http.getString();
+        return_var = payload ;
       
       }
       else {
@@ -492,6 +496,7 @@ sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_sto
 
 void drop_screen(){
   if(options_select_mode == 0){ // main options menu
+  display.setTextSize(1);
   // rect loop
   for(int i =0 ;i<=4 ; i++){
     if(i==block_cursor){  // fill the rect white when cursor passes
@@ -508,7 +513,7 @@ void drop_screen(){
       display.setTextColor(BLACK);
      }
      else{
-      display.setTextColor(WHITE);
+      display.setTextColor(WHITE);  // inverting text
      }
     display.print(options_list[options_outer_counter][options_inner_counter]);  // print option labels
     options_inner_counter++;  // print next label inside the same page
@@ -543,6 +548,8 @@ void drop_screen(){
   display.fillRoundRect(120,scroll_bar_place,5,20,5,WHITE);} // print the actual scroll bar
   
 
+
+
   if(selecT == "pressed" && options_outer_counter == 0 && block_cursor == 0 && options_select_mode == 0){ //entering the first option
     options_select_mode = 1;  // each one represents an option 
     last_option_select_time = millis(); // for not regestring multiple presses
@@ -552,19 +559,122 @@ void drop_screen(){
 
 
 
-
-
+// for getting the date from the server just once when this menu is opened
+// not useful :)
+/*
+if(got_the_date_from_db == false){
+      current_get_day_and_month = get();  //update from server
+      got_the_date_from_db = true ; // updated! 
+    }
+*/
 
 // first option menu (end & upload)
-  if(options_select_mode == 1){
-    display.setTextColor(WHITE, BLACK);
-    bool done_uploading = false;
-    time_critical = true ;
-    bool chose_date = false;
-    if(chose_date == false){
-      String date = get();
-      Serial.print(date);
-      chose_date = true ;
+  if(options_select_mode == 1){ //first menu + updated date
+    int day_of_upload = 1;
+    int day_of_upload_1 = rtc.getTime("%d").toInt(); //the current real-time day (stored in a var to reduce cpu cycles)
+    int day_of_upload_2 = rtc.getTime("%d").toInt() - 1 ; //the other day of upload
+    int month_of_upload = rtc.getTime("%m").toInt(); //the current real-time month (stored in a var to reduce cpu cycles)
+    int year_of_upload = rtc.getTime("%Y").toInt();
+    display.setTextColor(WHITE,BLACK);  //for not transperant bg
+    bool done_uploading = false;  // flag to leave the upload menu
+    time_critical = true ;  // flag to not turn off the screen while uploading
+    //this is for calculating the previous day when the day is 1 (1 - 1 = 0 that's wrong)
+    if(day_of_upload_1 == 1){
+      if(month_of_upload == 5 || month_of_upload == 7 || month_of_upload == 10 || month_of_upload == 12){
+        day_of_upload_2 = 30 ;  //months with 31 days
+        month_of_upload -- ;  // change month
+      }
+      else if(month_of_upload == 3){  //february
+        if( ((rtc.getTime("%Y").toInt()%4 == 0) && (rtc.getTime("%Y").toInt() % 100 != 0) ) || rtc.getTime("%Y").toInt() % 400 == 0){ //test if the year is a leap year
+          day_of_upload_2 = 29; // leap
+          month_of_upload -- ;  // change month
+        }
+        else{
+          day_of_upload_2 = 28; //normal
+          month_of_upload -- ;  // change month
+        }
+      }
+      else{
+        day_of_upload_2 = 31 ;  //months that are 30 days
+        if(month_of_upload == 1){
+          year_of_upload -- ;
+          month_of_upload = 12;
+        }
+        else{
+        month_of_upload -- ;  // change month 
+        }
+      }
+    }
+
+
+
+
+
+   //*********************
+    bool chose_date = false;    // for navigating between the choosing menu and the actual upload menu
+    if(chose_date == false){    // ****the choosing menu****
+      display.clearDisplay();
+      //not useful
+     //  int current_get_day_of_month = current_get_day_and_month.substring(0,current_get_day_and_month.indexOf(",")).toInt();   
+      // int current_get_month = current_get_day_and_month.substring(current_get_day_and_month.indexOf(",")+1,current_get_day_and_month.length()).toInt();
+      //////////////////
+      display.setCursor(5,0);
+      display.setTextSize(2);
+      display.print("Select Day");
+      display.setCursor(35,20);
+      display.setTextSize(1);
+      display.print("of upload");
+      //right set
+
+      display.setTextSize(2);
+      display.setCursor(5,40);
+      display.print(rtc.getTime("%d")); //current day from rtc
+      display.setTextSize(1);
+      display.setCursor(30,45);
+      display.print("/");
+      display.print(rtc.getTime("%02m"));
+
+
+      display.setTextSize(2);
+      display.setCursor(75,40);
+      char temp_day_char_storage[30]; // just temp var for formatting
+      sprintf(temp_day_char_storage,"%02i" ,day_of_upload_2); // format the printing message
+      display.print(temp_day_char_storage);
+      display.setTextSize(1);
+      display.setCursor(100,45);
+      display.print("/");
+      char temp_month_print[30];
+      sprintf(temp_month_print,"%02i",month_of_upload);
+      display.print(temp_month_print);
+      if(right == "pressed" && get_date_cursor == 0){ //change the chosen date
+      get_date_cursor = 1;
+      }
+      else if(left == "pressed" && get_date_cursor == 1){
+         get_date_cursor = 0;
+     }
+
+      if(get_date_cursor == 0){ // draw the line accordingly
+         display.drawLine(10,60,40,60,WHITE);
+      }
+      else if(get_date_cursor == 1){
+        display.drawLine(80,60,110,60,WHITE);
+      }
+      
+        if(get_date_cursor == 0){ // set the day of upload
+          day_of_upload = day_of_upload_1;  //right (rtc day)
+        }
+        else if(get_date_cursor == 1){
+          day_of_upload = day_of_upload_2; //left (rtc day -1)
+        }
+        
+      if(selecT == "pressed" && millis() > last_option_select_time + 100 ){ //switch to uplaod screen
+
+          last_option_select_time = millis();
+          chose_date = true ; //choosed the date
+      }
+
+      /////////////////
+      
     }
 
 
@@ -574,41 +684,45 @@ void drop_screen(){
 
 
 
-
-    if(chose_date == true){
+// **** uploading screen ****
+    if(chose_date == true){ //if the date is chosen from the last screen
     display.clearDisplay();
     display.setCursor(5,0);
     display.setTextSize(2);
     display.print("END OF DAY");
     display.setTextSize(1);
     display.setCursor(0,20);
-    display.print("Server : 192.168.1.11");
+    display.print("Server: ");
+    display.print(String(sql_server).substring(7,19)); //the ip address of server
      display.setCursor(20,35);
      display.print("the day : ");
-     display.print(rtc.getTime("%d"));
-     int activity_print_counter = 0;
-    for(int i = 0; i<4 ; i++){
-      for(int j =0 ; j<12 ; j++){
-          post(i,j);
+     char temp_date_print[30];
+     sprintf(temp_date_print,"%02i/%02i",day_of_upload,month_of_upload);
+     display.print(temp_date_print);  // the chosen date of upload (from last screen)
+     int activity_print_counter = 0;  // for printing the progress bar on screen
+    for(int i = 0; i<4 ; i++){  // 4 pages
+      for(int j =0 ; j<12 ; j++){ // 12 activities
+         // post(i,j,day_of_upload,month_of_upload);      // the actual post function
           display.setCursor(20,55);
-         char uplaod_progress_message[20] = "";
+         char uplaod_progress_message[20] = ""; // dont know why !
          display.print("uploaded ");
-         display.print(activity_print_counter);
+         display.print(activity_print_counter); // progress bar
          display.print("/52");
           display.print(uplaod_progress_message);
           display.display();
-          activity_print_counter ++ ;
+          activity_print_counter ++ ; // increase the activity counter
       }
     }
-    done_uploading = true;}
-
+    done_uploading = true; // finished uploading (exit screen)
+    
     display.display();
     
-   if((selecT == "pressed" && millis() > last_option_select_time + 2000) || done_uploading == true){
-    time_critical = false ;
-    options_select_mode = 0;
+   if((selecT == "pressed" && millis() > last_option_select_time + 2000) || done_uploading == true){  // either the process is aborted or it finished
+    //got_the_date_from_db = false;
+    time_critical = false ; // you can turn the screen off
+    options_select_mode = 0;  // go to options menu
     last_option_select_time = millis();
-  }
+  }}
   
   }
 
