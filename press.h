@@ -9,6 +9,7 @@ public:
     int bounce_press();
     int press_mode();
     int last_press_time ;   //ignoring multiple presses at the same time for press function
+    int before_last_press_time = 0;
     int last_press_time_bounce = 0 ; //ignoring multiple presses at the same time for bounce function
 private:
     int _pin,_nowpress,_lastpress,_presstime;

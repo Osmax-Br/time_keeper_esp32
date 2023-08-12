@@ -2,6 +2,7 @@
 #include "press.h"
 button_press::button_press(int pin){
     pinMode(pin,INPUT_PULLUP); //code to run in each object init.
+    int before_last_press_time ;
     _pin = pin;
    
 }   
@@ -18,18 +19,21 @@ _nowpress = digitalRead(_pin);
     _lastpress = 0;
     if(millis()- _presstime < 300){ // the duration of the normal press (changing this changes also the duration of long press)
       if(millis() > last_press_time + 500){ //for ignoring dual presses at the same time
+    before_last_press_time = last_press_time;
     return_var = "pressed";
     last_press_time = millis(); //updating last time pressed
     }
     }
     else{
          if(millis() > last_press_time + 10){
-     return_var = "long_pressed";
+    before_last_press_time = last_press_time;
+    return_var = "long_pressed";
     last_press_time = millis();
     }
      
     }
   }
+  
  return return_var ;
 }
 

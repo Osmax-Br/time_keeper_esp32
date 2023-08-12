@@ -33,7 +33,7 @@ bool time_critical = false ; // for not turning the screen off while uploading
 //************************************************
 //ui vars
 String chosen_value = "Nothing"; //the chosen value from the grid
-int select_mode = 0 ; //for maniging selection ways
+int select_mode = 0 ; //for maniging selection ways || 0 main screen , 1 grid selection , 2 , 3 screen off , 4 drop down menu , 5 error message
 int filled_rect = -1 ; //for inverting text
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
 const int pages = 4; // ui pages number
@@ -45,7 +45,8 @@ String str[pages][12] = {{"school","mosque","sleep","musiq","eat","anime","bath"
 int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},{42,17,43,18},{84,17,43,18}},{{0,33,43,17},{42,33,43,17},{84,33,43,17}},{{0,49,43,15},{42,49,43,15},{84,49,43,15}}};  //the data of each rectangular in the grid eg: width,height,x,y
 int lastpress,press_state = 0; //for button class
 int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
-
+String error_message_text = "" ;
+int last_select_mode = 0;
 //************************************************************
 // rtc vars
 
@@ -76,10 +77,9 @@ button_press button_down(34);
 button_press button_right(33);
 button_press button_left(32);
 button_press button_selecT(27);
-int last_press_time = 0; // for ignoring multiple presses at the same moment
 String up,down,right,left,selecT = "" ; // strores button values
 int up_bounce,down_bounce,righ_bounce,left_bounce,selecT_bounce = 0;  // stores bounce press values
-
+int last_press_time = 0;   //ignoring multiple presses at the same time for press function
 //****************************************************************
 // internal rtc timer vars
 
@@ -156,7 +156,7 @@ int options_outer_counter = 0;
 int block_cursor = 0;
 int options_select_mode = 0 ;
 // 0 = menu , 1 = end&upload ....etc
-int last_option_select_time = 0;
+//int last_press_time = 0;
 
 int get_date_cursor = 0 ; // 0 right , 1 left
 bool got_the_date_from_db = false ;
@@ -293,7 +293,26 @@ void web_server(){
 }
 
 
-
+// error message function
+void error_message(String error_text_message,int last_select_mode){
+  if(select_mode == 5){
+  display.setTextSize(1);
+  display.setCursor(0,0);
+  display.print(error_text_message);
+  display.drawRect(40,45,50,15,WHITE); 
+  display.setCursor(60,48);
+  display.print("ok");
+  display.display();
+  
+  if(selecT == "pressed" && millis() > last_press_time + 100){
+    display.clearDisplay();
+    Serial.print("here");
+    select_mode = last_select_mode ;
+    last_select_mode = 0;
+    last_press_time = millis();
+    return ;
+  }
+}}
 
 
 void get_ntp_time( void * pvParameters ){ //get time data from ntp
@@ -455,6 +474,16 @@ void main_screen(){
   else{
     display.print("Error! cant get time"); 
   }
+ 
+
+ if(selecT == "pressed" && chosen_value=="Nothing" && millis() > last_press_time + 100){
+    last_select_mode = select_mode;
+    select_mode = 5;
+    error_message_text = "choose something";
+    last_press_time = millis();
+   // Serial.print("here");
+  }
+
   display.display();
 }
 
@@ -552,7 +581,7 @@ void drop_screen(){
 
   if(selecT == "pressed" && options_outer_counter == 0 && block_cursor == 0 && options_select_mode == 0){ //entering the first option
     options_select_mode = 1;  // each one represents an option 
-    last_option_select_time = millis(); // for not regestring multiple presses
+    last_press_time = millis(); // for not regestring multiple presses
   }
  
   
@@ -667,23 +696,15 @@ if(got_the_date_from_db == false){
           day_of_upload = day_of_upload_2; //left (rtc day -1)
         }
         
-      if(selecT == "pressed" && millis() > last_option_select_time + 100 ){ //switch to uplaod screen
+      if(selecT == "pressed" && millis() > last_press_time + 100 ){ //switch to uplaod screen
 
-          last_option_select_time = millis();
+          last_press_time = millis();
           chose_date = true ; //choosed the date
       }
 
       /////////////////
       
     }
-
-
-
-
-
-
-
-
 // **** uploading screen ****
     if(chose_date == true){ //if the date is chosen from the last screen
     display.clearDisplay();
@@ -702,7 +723,7 @@ if(got_the_date_from_db == false){
      int activity_print_counter = 0;  // for printing the progress bar on screen
     for(int i = 0; i<4 ; i++){  // 4 pages
       for(int j =0 ; j<12 ; j++){ // 12 activities
-         // post(i,j,day_of_upload,month_of_upload);      // the actual post function
+         // post(i,j,day_of_upload,month_of_upload,year_of_upload);      // the actual post function
           display.setCursor(20,55);
          char uplaod_progress_message[20] = ""; // dont know why !
          display.print("uploaded ");
@@ -714,28 +735,33 @@ if(got_the_date_from_db == false){
       }
     }
     done_uploading = true; // finished uploading (exit screen)
-    
     display.display();
     
-   if((selecT == "pressed" && millis() > last_option_select_time + 2000) || done_uploading == true){  // either the process is aborted or it finished
+   if((selecT == "pressed" && millis() > last_press_time + 2000) || done_uploading == true){  // either the process is aborted or it finished
     //got_the_date_from_db = false;
     time_critical = false ; // you can turn the screen off
     options_select_mode = 0;  // go to options menu
-    last_option_select_time = millis();
+    last_press_time = millis();
   }}
   
   }
-
-
-
-
-
-
-
-
-
-
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void setup() {
   sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);  // for initilizing the counter string
@@ -779,6 +805,7 @@ down = button_down.press();
 right = button_right.press();
 left = button_left.press();
 selecT = button_selecT.press(); // the name is with "T" not "t" due to interferance with another library :p
+
 // adding the values of bounce press vars
 selecT_bounce = button_selecT.bounce_press(); 
 
@@ -827,9 +854,17 @@ screen_off();
 
 if(WiFi.status() == WL_CONNECTED && server_started == false){
    web_server();
-   server_started = true ;
+   server_started = true;
 }
+
    
+
+if(select_mode == 5){
+  display.clearDisplay();
+  error_message(error_message_text,last_select_mode);
+} 
+
+
 display.display();
 }
  
