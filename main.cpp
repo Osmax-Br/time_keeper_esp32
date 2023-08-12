@@ -156,7 +156,6 @@ int options_outer_counter = 0;
 int block_cursor = 0;
 int options_select_mode = 0 ;
 // 0 = menu , 1 = end&upload ....etc
-//int last_press_time = 0;
 
 int get_date_cursor = 0 ; // 0 right , 1 left
 bool got_the_date_from_db = false ;
@@ -194,7 +193,6 @@ void post(int page , int activity , int day_of_upload , int month_of_upload , in
      char post_message[500] ; //storing the post message                                                                                                                                                                                                                                //rtc.getTime("%I:%M:%S %p %a %d/%m")
      // should change the values in the next line to varaibles
      sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%s&activity_date_day_number=%s&activity_date_weekday=%s&activity_date_hour=%s&activity_date_minute=%s&activity_date_year=%s",str[page][activity],data_storage[page][activity][2],data_storage[page][activity][1],data_storage[page][activity][0],month_of_upload,day_of_upload,rtc.getTime("%a"),rtc.getTime("%H"),rtc.getTime("%M"),year_of_upload);
-     //Serial.println(post_message);
       int httpResponseCode = http.POST(post_message);   
       if(httpResponseCode>0){
   
@@ -297,6 +295,7 @@ void web_server(){
 void error_message(String error_text_message,int last_select_mode){
   if(select_mode == 5){
   display.setTextSize(1);
+  display.setTextColor(WHITE);
   display.setCursor(0,0);
   display.print(error_text_message);
   display.drawRect(40,45,50,15,WHITE); 
@@ -306,8 +305,7 @@ void error_message(String error_text_message,int last_select_mode){
   
   if(selecT == "pressed" && millis() > last_press_time + 100){
     display.clearDisplay();
-    Serial.print("here");
-    select_mode = last_select_mode ;
+    select_mode = last_select_mode;
     last_select_mode = 0;
     last_press_time = millis();
     return ;
@@ -481,7 +479,6 @@ void main_screen(){
     select_mode = 5;
     error_message_text = "choose something";
     last_press_time = millis();
-   // Serial.print("here");
   }
 
   display.display();
@@ -566,7 +563,9 @@ void drop_screen(){
 
 // move down (same way)
   if(down == "pressed"){
-    if(options_outer_counter == 3 && block_cursor ==3){}
+    if(options_outer_counter == 3 && block_cursor ==3){
+
+    }
     else{
     block_cursor ++ ;}
     if(block_cursor == 4  && scroll_bar_place != 31 && options_outer_counter != 4){
@@ -579,14 +578,20 @@ void drop_screen(){
 
 
 
-  if(selecT == "pressed" && options_outer_counter == 0 && block_cursor == 0 && options_select_mode == 0){ //entering the first option
-    options_select_mode = 1;  // each one represents an option 
-    last_press_time = millis(); // for not regestring multiple presses
-  }
+ // if(selecT == "pressed" && options_outer_counter == 0 && block_cursor == 0 && options_select_mode == 0){ //entering the first option
+   // options_select_mode = 1;  // each one represents an option 
+   // last_press_time = millis(); // for not regestring multiple presses
+  //}
  
-  
-
-
+  if(selecT == "pressed" && options_select_mode == 0){ //entering the first option
+    int option_counter_temp = 0;
+    option_counter_temp = options_outer_counter*4;
+    option_counter_temp += block_cursor ;
+    option_counter_temp++ ;
+    last_press_time = millis(); // for not regestring multiple presses
+    options_select_mode = option_counter_temp;
+    Serial.print(options_select_mode);
+  } 
 
 // for getting the date from the server just once when this menu is opened
 // not useful :)
@@ -599,6 +604,13 @@ if(got_the_date_from_db == false){
 
 // first option menu (end & upload)
   if(options_select_mode == 1){ //first menu + updated date
+  if(rtc_time_updated == false && millis() > last_press_time + 100){
+    last_select_mode = select_mode;
+    select_mode = 5;
+    error_message_text = "please update time";
+    options_select_mode = 0;
+    last_press_time = millis();
+  }
     int day_of_upload = 1;
     int day_of_upload_1 = rtc.getTime("%d").toInt(); //the current real-time day (stored in a var to reduce cpu cycles)
     int day_of_upload_2 = rtc.getTime("%d").toInt() - 1 ; //the other day of upload
@@ -745,6 +757,21 @@ if(got_the_date_from_db == false){
   }}
   
   }
+
+
+
+
+if(options_select_mode >= 2){
+    last_select_mode = select_mode;
+    select_mode = 5;
+    error_message_text = "not done yet";
+    options_select_mode = 0;
+    last_press_time = millis();
+}
+
+
+
+
 }
 
 
@@ -846,7 +873,13 @@ if(WiFi.status() != WL_CONNECTED && millis() > connection_begin + 3600000){ // i
   select_mode = 4;
  }
  else if(select_mode == 4 && up == "long_pressed"){
-  select_mode = 0;
+  if(options_select_mode == 0){
+    select_mode = 0;
+  }
+  else{
+    options_select_mode = 0;
+  }
+  
  }
 
 
