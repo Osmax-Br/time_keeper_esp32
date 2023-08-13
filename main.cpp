@@ -16,8 +16,15 @@
 #include <Adafruit_SSD1306.h>
 #include <ESP32Time.h> // for using the internal rtc
 #include <IRremote.hpp>
+#include "DHT.h"
 
-
+//******************************
+// dht int
+#define DHTPIN 13
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+int last_temp_update = 0;
+float temperature,humidity,heat_index = 0;
 /*
 
 INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_passed,activity_date_month,activity_date_day_number,activity_date_weekday,activity_date_hour,activity_date_minute)
@@ -29,6 +36,7 @@ INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_pass
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
+#include <Fonts/FreeMono9pt7b.h>
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 int last_time_screen_on = 0;
 bool time_critical = false ; // for not turning the screen off while uploading
@@ -549,17 +557,22 @@ print_label(current_page,cursor[0],cursor[1]); // printing the lables
 
 
 void main_screen(){
+
+
+  
  display.clearDisplay();
  display.setTextColor(WHITE);
-  display.setCursor(0,40+15);
+  display.setCursor(45,53);
   display.setTextSize(1);
-  display.print("choice: ");
+ //display.print("choice: ");
   if(chosen_value=="Nothing"){
     display.print("Nothing");
     }
   else{
+
     display.print(chosen_value);
     } 
+  display.setFont(NULL);  
   display.setCursor(17,0+15);
   display.setTextSize(2);
   display.print(time_counter_string);
@@ -572,6 +585,8 @@ void main_screen(){
     display.print("Error! cant get time"); 
   }
  
+
+
 
  if(selecT == "pressed" && chosen_value=="Nothing" && millis() > last_press_time + 100){
     last_select_mode = select_mode;
@@ -617,7 +632,34 @@ sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_sto
 
 }
 
+void temp_screen(){
+  display.clearDisplay();
 
+  if(millis() > last_temp_update + 2000){
+    humidity = dht.readHumidity();
+    temperature = dht.readTemperature();
+    heat_index = dht.computeHeatIndex(temperature, humidity, false);
+    last_temp_update = millis();
+}
+
+//sprintf(temp_temp_print,"I %.01f C%c , H %.01f %%",heat_index,(char)247,humidity);
+    display.setCursor(0,0);
+    display.setTextSize(1);
+    display.print("TEMP  ");
+    display.setTextSize(2);
+    display.printf("%.01f C%c",temperature,(char)247);
+    display.setCursor(0,25);
+    display.setTextSize(1);
+    display.print("HUMID   ");
+    display.setTextSize(2);
+    display.printf("%.01f %%",humidity);
+    display.setCursor(0,50);
+    display.setTextSize(1);
+    display.print("INDEX ");
+    display.setTextSize(2);
+    display.printf("%.01f C%c",heat_index,(char)247);
+    display.display();
+}
 
 void drop_screen(){
   if(options_select_mode == 0){ // main options menu
@@ -919,6 +961,8 @@ void setup() {
    }
 
    IrReceiver.begin(14, ENABLE_LED_FEEDBACK);
+   
+   dht.begin();
 }
 
 
@@ -938,7 +982,6 @@ ir_button();
 
 
 
-
 // adding the values of bounce press vars
 selecT_bounce = button_selecT.bounce_press(); 
 
@@ -950,6 +993,22 @@ if(selecT == "long_pressed" ){ //this is for entering the grid mode or main scre
     select_mode = 1;
   }
 }
+
+
+if(select_mode == 0 && right == "long_pressed"){
+    select_mode = 6;
+}
+if(select_mode == 6 && left == "long_pressed"){
+    select_mode = 0;
+
+}
+
+
+if(select_mode == 6){
+  temp_screen();
+}
+
+
 
 if (select_mode == 1){
   select_mode = 0;
@@ -1002,13 +1061,6 @@ if(select_mode == 5){
   display.clearDisplay();
   error_message(error_message_text,last_select_mode);
 } 
-
-
-
-
-
-
-
 
 
 
