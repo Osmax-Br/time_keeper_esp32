@@ -15,6 +15,9 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ESP32Time.h> // for using the internal rtc
+#include <IRremote.hpp>
+
+
 /*
 
 INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_passed,activity_date_month,activity_date_day_number,activity_date_weekday,activity_date_hour,activity_date_minute)
@@ -46,7 +49,11 @@ int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},
 int lastpress,press_state = 0; //for button class
 int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
 String error_message_text = "" ;
-int last_select_mode = 0;
+int last_select_mode = 0; // this is for error message to return to last screen
+bool ir_long_press = false;
+String temp_button_return = "";
+int last_time_long_press_mode = 0;
+
 //************************************************************
 // rtc vars
 
@@ -150,7 +157,7 @@ const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php";
 
 //********************************************************
 //drop screen vars
-String options_list[4][4] = {{"End day&upload","change location","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","",""},{"","","",""}};
+String options_list[4][4] = {{"End day&upload","change location","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","reset smth",""},{"","","",""}};
 int scroll_bar_place = 1;
 int options_outer_counter = 0;
 int block_cursor = 0;
@@ -311,6 +318,98 @@ void error_message(String error_text_message,int last_select_mode){
     return ;
   }
 }}
+
+
+
+
+void ir_button(){//32086590080
+    if(IrReceiver.decodedIRData.decodedRawData == 3208659008){ 
+  
+  if(ir_long_press == false){
+  ir_long_press = true;
+  last_time_long_press_mode = millis();
+  IrReceiver.decodedIRData.decodedRawData = 0;
+  }
+  else if(ir_long_press == true){
+  ir_long_press = false;
+  IrReceiver.decodedIRData.decodedRawData = 0;
+  }
+  
+
+}
+
+
+
+
+if(ir_long_press == false){
+  temp_button_return = "pressed";
+  digitalWrite(4,LOW);
+}
+else{
+  temp_button_return = "long_pressed";
+  digitalWrite(4,HIGH);
+  
+}
+
+
+if(millis() > last_time_long_press_mode + 10000 && ir_long_press == true){
+    digitalWrite(4,LOW);
+    ir_long_press = false;
+}
+//Serial.print(temp_button_return);
+
+
+if(IrReceiver.decodedIRData.decodedRawData == 4060954688){ 
+  selecT = temp_button_return;
+  if(temp_button_return = "long_pressed"){
+    ir_long_press = 0;
+  }
+  IrReceiver.decodedIRData.decodedRawData = 0;
+}
+if(IrReceiver.decodedIRData.decodedRawData == 4094378048){
+        up = temp_button_return; 
+          if(temp_button_return = "long_pressed"){
+            ir_long_press = 0;}
+        IrReceiver.decodedIRData.decodedRawData = 0;
+}
+if(IrReceiver.decodedIRData.decodedRawData == 4044243008){
+        down = temp_button_return;
+          if(temp_button_return = "long_pressed"){
+          ir_long_press = 0;} 
+        IrReceiver.decodedIRData.decodedRawData = 0;
+}
+if(IrReceiver.decodedIRData.decodedRawData == 3994107968){
+        right = temp_button_return; 
+        if(temp_button_return = "long_pressed"){
+        ir_long_press = 0;}
+        IrReceiver.decodedIRData.decodedRawData = 0;
+}
+if(IrReceiver.decodedIRData.decodedRawData == 4010819648){
+        left = temp_button_return; 
+        if(temp_button_return = "long_pressed"){
+        ir_long_press = 0;
+  }
+        IrReceiver.decodedIRData.decodedRawData = 0;
+}
+
+
+
+
+  if (IrReceiver.decode()) {
+
+      Serial.print(IrReceiver.decodedIRData.decodedRawData);
+      // USE NEW 3.x FUNCTIONS
+       //IrReceiver.printIRResultShort(&Serial); // Print complete received data in one line
+      // IrReceiver.checkForRepeatSpaceTicksAndSetFlag(10);
+       //IrReceiver.checkForRecordGapsMicros(&Serial);
+     // IrReceiver.printIRSendUsage(&Serial);   // Print the statement required to send this data
+      IrReceiver.resume(); // Enable receiving of the next value
+  }
+
+}
+
+
+
 
 
 void get_ntp_time( void * pvParameters ){ //get time data from ntp
@@ -799,7 +898,7 @@ void setup() {
   display.setTextSize(1);
   display.setTextColor(WHITE,BLACK);
   display.setCursor(0,0);
-
+  pinMode(4,OUTPUT);
 
 
   timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
@@ -819,6 +918,7 @@ void setup() {
    server_started = true ;
    }
 
+   IrReceiver.begin(14, ENABLE_LED_FEEDBACK);
 }
 
 
@@ -832,6 +932,12 @@ down = button_down.press();
 right = button_right.press();
 left = button_left.press();
 selecT = button_selecT.press(); // the name is with "T" not "t" due to interferance with another library :p
+ir_button();  
+
+
+
+
+
 
 // adding the values of bounce press vars
 selecT_bounce = button_selecT.bounce_press(); 
@@ -896,6 +1002,21 @@ if(select_mode == 5){
   display.clearDisplay();
   error_message(error_message_text,last_select_mode);
 } 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 display.display();
