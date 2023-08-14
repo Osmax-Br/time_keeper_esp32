@@ -165,7 +165,7 @@ const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php";
 
 //********************************************************
 //drop screen vars
-String options_list[4][4] = {{"End day&upload","change location","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","reset smth",""},{"","","",""}};
+String options_list[4][4] = {{"End day&upload","change location","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","reset activity","test rgb"},{"","","",""}};
 int scroll_bar_place = 1;
 int options_outer_counter = 0;
 int block_cursor = 0;
@@ -177,6 +177,15 @@ bool got_the_date_from_db = false ;
 String current_get_day_and_month ;
 
 
+//******************************************************
+//rgb led vars
+#define PIN_RED    15 // GPIO23
+#define PIN_GREEN  25 // GPIO22
+#define PIN_BLUE   12 // GPIO21
+//                       red 0      green 1   blue2     yellow 3    cyan 4      maginta 5   pink 6     off 7
+int rgb_values[15][3] = {{255,0,0},{0,255,0},{0,0,255},{250,100,3},{7,245,201},{180,7,245},{245,7,75},{0,0,0}};
+String rgb_values_name[15] = {"Red","Green","Blue","Yellow","Cyan","Maginta","Pink","Off"};
+int current_rgb = 0;
 
 
 
@@ -184,10 +193,12 @@ String current_get_day_and_month ;
 
 
 
+void rgb_display(int rgb_value_index){
+    analogWrite(PIN_RED,255 - rgb_values[rgb_value_index][0]);
+    analogWrite(PIN_GREEN,255 - rgb_values[rgb_value_index][1]);
+    analogWrite(PIN_BLUE,255 - rgb_values[rgb_value_index][2]);
 
-
-
-
+}
 
 
 
@@ -309,6 +320,7 @@ void web_server(){
 // error message function
 void error_message(String error_text_message,int last_select_mode){
   if(select_mode == 5){
+  rgb_display(0);
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(0,0);
@@ -351,17 +363,19 @@ void ir_button(){//32086590080
 
 if(ir_long_press == false){
   temp_button_return = "pressed";
-  digitalWrite(4,LOW);
+  rgb_display(7);
+  
 }
 else{
   temp_button_return = "long_pressed";
-  digitalWrite(4,HIGH);
+  rgb_display(4);
   
 }
 
 
 if(millis() > last_time_long_press_mode + 10000 && ir_long_press == true){
-    digitalWrite(4,LOW);
+    rgb_display(7);
+    last_time_long_press_mode = millis();
     ir_long_press = false;
 }
 //Serial.print(temp_button_return);
@@ -559,7 +573,7 @@ print_label(current_page,cursor[0],cursor[1]); // printing the lables
 void main_screen(){
 
 
-  
+ // rgb_display(7);
  display.clearDisplay();
  display.setTextColor(WHITE);
   display.setCursor(45,53);
@@ -650,7 +664,7 @@ void temp_screen(){
     display.printf("%.01f C%c",temperature,(char)247);
     display.setCursor(0,25);
     display.setTextSize(1);
-    display.print("HUMID   ");
+    display.print("HUMID  ");
     display.setTextSize(2);
     display.printf("%.01f %%",humidity);
     display.setCursor(0,50);
@@ -658,6 +672,12 @@ void temp_screen(){
     display.print("INDEX ");
     display.setTextSize(2);
     display.printf("%.01f C%c",heat_index,(char)247);
+    if(heat_index >= 30){
+        rgb_display(0);
+    }
+    else{
+        rgb_display(1);
+    }
     display.display();
 }
 
@@ -874,6 +894,7 @@ if(got_the_date_from_db == false){
      sprintf(temp_date_print,"%02i/%02i",day_of_upload,month_of_upload);
      display.print(temp_date_print);  // the chosen date of upload (from last screen)
      int activity_print_counter = 0;  // for printing the progress bar on screen
+    rgb_display(5);
     for(int i = 0; i<4 ; i++){  // 4 pages
       for(int j =0 ; j<12 ; j++){ // 12 activities
          // post(i,j,day_of_upload,month_of_upload,year_of_upload);      // the actual post function
@@ -899,10 +920,27 @@ if(got_the_date_from_db == false){
   
   }
 
+if(options_select_mode == 12){
+  display.clearDisplay();
+  if(select_mode == 4 && right == "pressed" && options_select_mode == 12 && current_rgb != 7){
+   current_rgb ++;
+}
+if(select_mode == 4 && options_select_mode == 12 && left == "pressed" && current_rgb != 0){
+   current_rgb --;
+}
+  rgb_display(current_rgb);
+  display.setCursor(30,10);
+  display.setTextColor(WHITE);
+  display.setTextSize(2);
+  display.print(rgb_values_name[current_rgb]);
+  display.setCursor(15,40);
+  display.setTextSize(1);
+  display.printf("(%i ,  %i ,  %i)",rgb_values[current_rgb][0],rgb_values[current_rgb][1],rgb_values[current_rgb][2]);
+  display.display();
+}
 
 
-
-if(options_select_mode >= 2){
+if(options_select_mode >= 2 && options_select_mode != 12){
     last_select_mode = select_mode;
     select_mode = 5;
     error_message_text = "not done yet";
@@ -941,7 +979,9 @@ void setup() {
   display.setTextColor(WHITE,BLACK);
   display.setCursor(0,0);
   pinMode(4,OUTPUT);
-
+  pinMode(PIN_RED,   OUTPUT);
+  pinMode(PIN_GREEN, OUTPUT);
+  pinMode(PIN_BLUE,  OUTPUT);
 
   timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
   timerAttachInterrupt(timer, &onTimer, true); 	// Attach interrupt
@@ -978,8 +1018,12 @@ left = button_left.press();
 selecT = button_selecT.press(); // the name is with "T" not "t" due to interferance with another library :p
 ir_button();  
 
-
-
+if(selecT == "pressed" || down == "pressed" || up == "pressed" || right == "pressed" || left == "pressed"){
+  rgb_display(6);
+}
+if(selecT == "long_pressed" || down == "long_pressed" || up == "long_pressed" || right == "long_pressed" || left == "long_pressed"){
+  rgb_display(2);
+}
 
 
 // adding the values of bounce press vars
@@ -1064,13 +1108,7 @@ if(select_mode == 5){
 
 
 
-
-
-
-
-
-
-
+//Serial.print(current_rgb);
 display.display();
 }
  
