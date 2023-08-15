@@ -36,6 +36,7 @@ INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_pass
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
+#include <Fonts/FreeMonoBoldOblique9pt7b.h>
 #include <Fonts/FreeMono9pt7b.h>
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 int last_time_screen_on = 0;
@@ -61,7 +62,7 @@ int last_select_mode = 0; // this is for error message to return to last screen
 bool ir_long_press = false;
 String temp_button_return = "";
 int last_time_long_press_mode = 0;
-
+bool ok_cancel_button = true ; // left = ok = true
 //************************************************************
 // rtc vars
 
@@ -159,6 +160,7 @@ TaskHandle_t ntp_time;  // getting the tine from internet
 
 //************************************************************
 // sql vars
+//String sql_server_string = "http://192.168.1.11/esp32sql/data_base_script.php"; 
 const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php"; 
 
 
@@ -203,34 +205,49 @@ void rgb_display(int rgb_value_index){
 
 
 
+
 // must add last_time var
 void post(int page , int activity , int day_of_upload , int month_of_upload , int year_of_upload) { // for pushing the data into the sqlite data base on the pc
 // on pc I used wimp to host a server
- 
  // http post
     if(WiFi.status()== WL_CONNECTED){ 
       HTTPClient http;
       
-   
-      http.begin(sql_server);
+      String s = sql_server;
+      http.begin(s.c_str());
       	
       http.addHeader("Content-Type", "application/x-www-form-urlencoded"); //Specify content-type header
      
-     char post_message[500] ; //storing the post message                                                                                                                                                                                                                                //rtc.getTime("%I:%M:%S %p %a %d/%m")
+     char post_message[2000] ; //storing the post message                                                                                                                                                                                                                                //rtc.getTime("%I:%M:%S %p %a %d/%m")
      // should change the values in the next line to varaibles
-     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%s&activity_date_day_number=%s&activity_date_weekday=%s&activity_date_hour=%s&activity_date_minute=%s&activity_date_year=%s",str[page][activity],data_storage[page][activity][2],data_storage[page][activity][1],data_storage[page][activity][0],month_of_upload,day_of_upload,rtc.getTime("%a"),rtc.getTime("%H"),rtc.getTime("%M"),year_of_upload);
+     sprintf(post_message,"chosen_activity=%s&hours_passed=%i&minutes_passed=%i&seconds_passed=%i&activity_date_month=%i&activity_date_day_number=%i&activity_date_weekday=%s&activity_date_hour=%s&activity_date_minute=%s&activity_date_year=%i",str[page][activity],data_storage[page][activity][2],data_storage[page][activity][1],data_storage[page][activity][0],month_of_upload,day_of_upload,rtc.getTime("%a"),rtc.getTime("%H"),rtc.getTime("%M"),year_of_upload);
       int httpResponseCode = http.POST(post_message);   
       if(httpResponseCode>0){
   
     String response = http.getString();  //Get the response to the request
     Serial.println(response);
     }
-      
+    Serial.print(httpResponseCode);
+    /* else{
+          last_select_mode = select_mode;
+          select_mode = 5;
+          error_message_text = "error during upload";
+          options_select_mode = 0;
+          last_press_time = millis();
+      }*/
       http.end();
     }}
 
 String get(){
   String return_var = "";
+      if(WiFi.status() != WL_CONNECTED){
+          last_select_mode = select_mode;
+          select_mode = 5;
+          error_message_text = "connect to wifi";
+          options_select_mode = 0;
+          last_press_time = millis();
+
+    }
 if(WiFi.status()== WL_CONNECTED){
       HTTPClient http;
 
@@ -419,14 +436,14 @@ if(IrReceiver.decodedIRData.decodedRawData == 4010819648){
 
   if (IrReceiver.decode()) {
 
-      Serial.print(IrReceiver.decodedIRData.decodedRawData);
+      //Serial.print(IrReceiver.decodedIRData.decodedRawData);
       // USE NEW 3.x FUNCTIONS
        //IrReceiver.printIRResultShort(&Serial); // Print complete received data in one line
       // IrReceiver.checkForRepeatSpaceTicksAndSetFlag(10);
        //IrReceiver.checkForRecordGapsMicros(&Serial);
      // IrReceiver.printIRSendUsage(&Serial);   // Print the statement required to send this data
       IrReceiver.resume(); // Enable receiving of the next value
-  }
+  } 
 
 }
 
@@ -626,6 +643,7 @@ void screen_off(){
 if(last_time_screen_on+30000<millis() && time_critical == false){  // change the auto display_off time 
   select_mode = 3; // that means the screen is off
   display.ssd1306_command(SSD1306_DISPLAYOFF); // switch the display off
+  options_select_mode = 0;
   }  
 }
 
@@ -751,7 +769,7 @@ void drop_screen(){
     option_counter_temp++ ;
     last_press_time = millis(); // for not regestring multiple presses
     options_select_mode = option_counter_temp;
-    Serial.print(options_select_mode);
+   // Serial.print(options_select_mode);
   } 
 
 // for getting the date from the server just once when this menu is opened
@@ -895,9 +913,10 @@ if(got_the_date_from_db == false){
      display.print(temp_date_print);  // the chosen date of upload (from last screen)
      int activity_print_counter = 0;  // for printing the progress bar on screen
     rgb_display(5);
+    paused = true;
     for(int i = 0; i<4 ; i++){  // 4 pages
       for(int j =0 ; j<12 ; j++){ // 12 activities
-         // post(i,j,day_of_upload,month_of_upload,year_of_upload);      // the actual post function
+          post(i,j,day_of_upload,month_of_upload,year_of_upload);      // the actual post function
           display.setCursor(20,55);
          char uplaod_progress_message[20] = ""; // dont know why !
          display.print("uploaded ");
@@ -909,6 +928,9 @@ if(got_the_date_from_db == false){
       }
     }
     done_uploading = true; // finished uploading (exit screen)
+    portENTER_CRITICAL_ISR(&timerMux); // for stopping other functions of changing this value at the same time
+    memset(data_storage, 0, sizeof(data_storage));
+    portEXIT_CRITICAL_ISR(&timerMux);
     display.display();
     
    if((selecT == "pressed" && millis() > last_press_time + 2000) || done_uploading == true){  // either the process is aborted or it finished
@@ -940,7 +962,97 @@ if(select_mode == 4 && options_select_mode == 12 && left == "pressed" && current
 }
 
 
-if(options_select_mode >= 2 && options_select_mode != 12){
+int address_num1 = 1;
+int address_num2 = 11;
+if(options_select_mode == 8){
+    display.setCursor(30,0);
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.print("192.168.");
+    display.setTextSize(2);
+    display.print("1.11");
+
+}
+
+
+
+if(options_select_mode == 11){
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.setCursor(0, 0);
+    display.println("do you want to reset?");
+    display.setCursor(23, 15);
+    display.setFont(&FreeMonoBoldOblique9pt7b);
+    display.print(chosen_value);
+    display.setFont(&FreeMono9pt7b);
+    display.setCursor(20, 40);
+    display.printf("%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);
+    display.setFont(NULL);
+    if(ok_cancel_button == false){
+    display.fillRoundRect(20, 45, 40, 15, 3, WHITE);
+    display.setCursor(23, 48);
+    display.setTextColor(BLACK);
+    display.print("Cancel");
+    display.setTextColor(WHITE);
+    display.drawRoundRect(70, 45, 40, 15, 3, 1);
+    display.setCursor(84, 48);
+    display.print("ok");}
+    else if(ok_cancel_button == true){
+    display.drawRoundRect(20, 45, 40, 15, 3, 1);
+    display.setCursor(23, 48);
+    display.setTextColor(WHITE);
+    display.print("Cancel");
+    display.fillRoundRect(70, 45, 40, 15, 3,WHITE);
+    display.setCursor(84, 48);
+    display.setTextColor(BLACK);
+    display.print("ok");
+    }
+
+
+
+
+    if(left == "pressed" && ok_cancel_button == true){
+      ok_cancel_button = false;
+    }
+    if(right == "pressed" && ok_cancel_button == false){
+      ok_cancel_button = true;
+    }
+
+    if(ok_cancel_button == false && selecT == "pressed" && millis() > last_press_time + 100){
+      ok_cancel_button = true;
+      last_press_time = millis();
+      options_select_mode = 0;
+    }
+    else if(ok_cancel_button == true && selecT == "pressed"&& millis() > last_press_time + 100){
+      if(chosen_value == "Nothing"){
+          last_select_mode = select_mode;
+          select_mode = 5;
+          error_message_text = "choose an activity";
+          options_select_mode = 11;
+          last_press_time = millis();
+      }
+      else{
+       portENTER_CRITICAL_ISR(&timerMux); // for stopping other functions of changing this value at the same time
+       data_storage[current_page][data_storage_index][0] = 0 ;
+       data_storage[current_page][data_storage_index][1] = 0 ;
+       data_storage[current_page][data_storage_index][2] = 0 ;
+       portEXIT_CRITICAL_ISR(&timerMux);
+       paused = true ;
+       last_press_time = millis();
+       options_select_mode = 0;
+      }
+
+    }
+
+
+    display.display();
+}
+
+
+
+if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11){
     last_select_mode = select_mode;
     select_mode = 5;
     error_message_text = "not done yet";
@@ -970,6 +1082,7 @@ if(options_select_mode >= 2 && options_select_mode != 12){
 
 
 void setup() {
+  
   sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);  // for initilizing the counter string
 
   Serial.begin(115200);
