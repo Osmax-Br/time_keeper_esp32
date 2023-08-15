@@ -17,14 +17,14 @@
 #include <ESP32Time.h> // for using the internal rtc
 #include <IRremote.hpp>
 #include "DHT.h"
-
+#include <Preferences.h>
 //******************************
 // dht int
-#define DHTPIN 13
+#define DHTPIN 13 // dht11 pin
 #define DHTTYPE DHT11
 DHT dht(DHTPIN, DHTTYPE);
-int last_temp_update = 0;
-float temperature,humidity,heat_index = 0;
+int last_temp_update = 0; // dht11 updates between 2 seconds intreval
+float temperature,humidity,heat_index = 0;  // storing heat informations
 /*
 
 INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_passed,activity_date_month,activity_date_day_number,activity_date_weekday,activity_date_hour,activity_date_minute)
@@ -36,11 +36,15 @@ INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_pass
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET     -1
-#include <Fonts/FreeMonoBoldOblique9pt7b.h>
+#include <Fonts/FreeMonoBoldOblique9pt7b.h> //fonts
 #include <Fonts/FreeMono9pt7b.h>
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 int last_time_screen_on = 0;
 bool time_critical = false ; // for not turning the screen off while uploading
+int screen_off_seconds = 0;
+int screen_off_minutes = 0;
+int saves_screen_off_time = 0;
+bool time_partitioned = false;
 
 //************************************************
 //ui vars
@@ -59,16 +63,16 @@ int lastpress,press_state = 0; //for button class
 int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
 String error_message_text = "" ;
 int last_select_mode = 0; // this is for error message to return to last screen
-bool ir_long_press = false;
-String temp_button_return = "";
-int last_time_long_press_mode = 0;
-bool ok_cancel_button = true ; // left = ok = true
+bool ir_long_press = false; // if we are in ir long press mode
+String temp_button_return = ""; // temporary for ir_button function
+int last_time_long_press_mode = 0;  // for not regestring multiple ir long presses
+bool ok_cancel_button = true ; // left = ok = true (for choosing ok-cancel screens)
 //************************************************************
 // rtc vars
 
 ESP32Time rtc(3600); // utc time offset , here in Syria it is 1 hour = 3600 sec
 bool rtc_time_updated = false;  // for not updating the time twice from the internet
-int last_rtc_update = 0;
+int last_rtc_update = 0;    // for not consuming the cpu for updating rtc
 
 
 //**************************************************************
@@ -116,7 +120,7 @@ int data_storage_index = 0;
 
 //****************************************************************
 // web server vars
-bool server_started = false ;
+bool server_started = false ; 
 WiFiClient  clientt;
 AsyncWebServer server(80);
 String timer_web_var(){
@@ -167,16 +171,20 @@ const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php";
 
 //********************************************************
 //drop screen vars
-String options_list[4][4] = {{"End day&upload","change location","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","reset activity","test rgb"},{"","","",""}};
-int scroll_bar_place = 1;
-int options_outer_counter = 0;
-int block_cursor = 0;
-int options_select_mode = 0 ;
+
+//the name of options
+String options_list[4][4] = {{"End day&upload","change Time zone","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","reset activity","test rgb"},{"","","",""}};
+int scroll_bar_place = 1; // for moving the cursor
+int options_outer_counter = 0;  // counting the pages
+int block_cursor = 0; // conuting the inner values inside page
+int options_select_mode = 0 ; // the main var in drop screen , defines the current option selected
 // 0 = menu , 1 = end&upload ....etc
 
 int get_date_cursor = 0 ; // 0 right , 1 left
-bool got_the_date_from_db = false ;
-String current_get_day_and_month ;
+bool got_the_date_from_db = false ; // not being used
+String current_get_day_and_month ;  // temp for storing date (not being used)
+
+
 
 
 //******************************************************
@@ -186,16 +194,18 @@ String current_get_day_and_month ;
 #define PIN_BLUE   12 // GPIO21
 //                       red 0      green 1   blue2     yellow 3    cyan 4      maginta 5   pink 6     off 7
 int rgb_values[15][3] = {{255,0,0},{0,255,0},{0,0,255},{250,100,3},{7,245,201},{180,7,245},{245,7,75},{0,0,0}};
-String rgb_values_name[15] = {"Red","Green","Blue","Yellow","Cyan","Maginta","Pink","Off"};
-int current_rgb = 0;
+String rgb_values_name[15] = {"Red","Green","Blue","Yellow","Cyan","Maginta","Pink","Off"}; //this is for test rgb option
+int current_rgb = 0;  // this is for test rgb option
+
+
+//***************************************************
+// prefrences vars
+Preferences saves;
 
 
 
-
-
-
-
-void rgb_display(int rgb_value_index){
+// should put it once
+void rgb_display(int rgb_value_index){  // we did 255 - valie because the led is common annode ==> 0 = on  , 1 = off
     analogWrite(PIN_RED,255 - rgb_values[rgb_value_index][0]);
     analogWrite(PIN_GREEN,255 - rgb_values[rgb_value_index][1]);
     analogWrite(PIN_BLUE,255 - rgb_values[rgb_value_index][2]);
@@ -213,8 +223,8 @@ void post(int page , int activity , int day_of_upload , int month_of_upload , in
     if(WiFi.status()== WL_CONNECTED){ 
       HTTPClient http;
       
-      String s = sql_server;
-      http.begin(s.c_str());
+     // String s = sql_server;
+      http.begin(sql_server);
       	
       http.addHeader("Content-Type", "application/x-www-form-urlencoded"); //Specify content-type header
      
@@ -332,6 +342,22 @@ void web_server(){
  
   server.begin();
 }
+
+
+
+String partition_time(int time){
+  int hours = time/3600;
+  int minutes = (time - (hours * 3600))/60 ; 
+  int seconds = time - (hours*3600 + minutes*60) ;
+  char return_value[100];
+  sprintf(return_value,"%02i:%02i:%02i",hours,minutes,seconds);
+  //Serial.println(return_value);
+  return return_value;
+}
+
+
+
+
 
 
 // error message function
@@ -640,7 +666,7 @@ void screen_off(){
   }
   last_time_screen_on = millis();
   }  
-if(last_time_screen_on+30000<millis() && time_critical == false){  // change the auto display_off time 
+if(last_time_screen_on+saves_screen_off_time<millis() && time_critical == false){  // change the auto display_off time 
   select_mode = 3; // that means the screen is off
   display.ssd1306_command(SSD1306_DISPLAYOFF); // switch the display off
   options_select_mode = 0;
@@ -1050,9 +1076,85 @@ if(options_select_mode == 11){
     display.display();
 }
 
+if(options_select_mode == 8){
+    if(time_partitioned == false){
+    String screen_off_time_string = partition_time(saves_screen_off_time/1000);
+    screen_off_seconds = screen_off_time_string.substring(6,8).toInt();
+    //Serial.println(screen_off_time_string.substring(6,8));
+   // Serial.println(screen_off_time_string.substring(3,5));
+    screen_off_minutes = screen_off_time_string.substring(3,5).toInt();
+    time_partitioned = true;
+    }
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.setCursor(0, 0);
+    display.println("   screen off time");
+    display.setCursor(20, 15);
+    display.setTextSize(3);
+    display.printf("%02i:%02i",screen_off_minutes,screen_off_seconds);
+    if(up == "pressed"){
+        if(ok_cancel_button == false && screen_off_minutes < 3){  //change minutes
+            screen_off_minutes ++ ;
+        }
+        if(ok_cancel_button == true && screen_off_minutes <= 59){  //change minutes
+            screen_off_seconds ++ ;
+        }
+        if(screen_off_seconds == 60){
+          screen_off_seconds = 0;
+          if(screen_off_minutes < 3){
+          screen_off_minutes ++ ;}
+        }
+    }
+
+    if(down == "pressed"){
+        if(ok_cancel_button == false && screen_off_minutes > 0){  //change minutes
+            screen_off_minutes -- ;
+        }
+        if(ok_cancel_button == true && screen_off_minutes > 0){  //change minutes
+            screen_off_seconds -- ;
+        }
+
+    }    
+
+    if(ok_cancel_button == false){
+    display.drawLine(25, 40, 50, 40, 1);
+    }
+    else{
+    display.drawLine(75, 40, 100, 40, 1);
+    }
+    display.setTextSize(1);
+    display.drawRoundRect(42, 48, 40, 15, 5, 1);
+    display.setCursor(57, 51);
+    display.print("ok");
+    display.display();
+    
+    
+    
+    if(left == "pressed" && ok_cancel_button == true){
+      ok_cancel_button = false;
+    }
+    if(right == "pressed" && ok_cancel_button == false){
+      ok_cancel_button = true;
+    }
+
+    if(selecT == "pressed" && millis() > last_press_time + 100){
+        //saves.putInt("screen_off_time",((screen_off_minutes*60) + screen_off_seconds)*1000);
+        time_partitioned = false;
+        saves_screen_off_time = ((screen_off_minutes*60) + screen_off_seconds)*1000;
+        saves.putUInt("screen_off_time",saves_screen_off_time);
+        Serial.println(saves_screen_off_time);
+        last_press_time = millis();
+        options_select_mode = 0;
+    }
 
 
-if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11){
+
+
+}
+
+if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8){
     last_select_mode = select_mode;
     select_mode = 5;
     error_message_text = "not done yet";
@@ -1116,6 +1218,11 @@ void setup() {
    IrReceiver.begin(14, ENABLE_LED_FEEDBACK);
    
    dht.begin();
+
+    saves.begin("settings", false);
+   //settings values init
+   saves.getUInt("gmt", 7200);
+   saves_screen_off_time = saves.getUInt("screen_off_time", 30000);
 }
 
 
