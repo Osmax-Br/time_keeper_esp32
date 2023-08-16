@@ -69,7 +69,8 @@ int last_time_long_press_mode = 0;  // for not regestring multiple ir long press
 bool ok_cancel_button = true ; // left = ok = true (for choosing ok-cancel screens)
 //************************************************************
 // rtc vars
-
+long gmt_offset = 0 ; 
+long gmt_offset_minutes,gmt_offset_hours = 0;
 ESP32Time rtc(3600); // utc time offset , here in Syria it is 1 hour = 3600 sec
 bool rtc_time_updated = false;  // for not updating the time twice from the internet
 int last_rtc_update = 0;    // for not consuming the cpu for updating rtc
@@ -345,13 +346,13 @@ void web_server(){
 
 
 
-String partition_time(int time){
-  int hours = time/3600;
-  int minutes = (time - (hours * 3600))/60 ; 
-  int seconds = time - (hours*3600 + minutes*60) ;
-  char return_value[100];
+String partition_time(long time){
+  long hours = time/3600;
+  long minutes = (time - (hours * 3600))/60 ; 
+  long seconds = time - (hours*3600 + minutes*60) ;
+  char return_value[200];
   sprintf(return_value,"%02i:%02i:%02i",hours,minutes,seconds);
-  //Serial.println(return_value);
+  Serial.println(time);
   return return_value;
 }
 
@@ -1076,12 +1077,88 @@ if(options_select_mode == 11){
     display.display();
 }
 
+if(options_select_mode == 2){
+    if(time_partitioned == false){
+    String gmt_offset_string = partition_time(gmt_offset);
+    gmt_offset_minutes = gmt_offset_string.substring(3,5).toInt();
+    gmt_offset_hours = gmt_offset_string.substring(0,2).toInt();
+    time_partitioned = true;
+    }
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.setCursor(0, 0);
+    display.println("     GMT offset");
+    display.setCursor(20, 15);
+    display.setTextSize(3);
+    display.printf("%02i:%02i",gmt_offset_hours,gmt_offset_minutes);
+    if(up == "pressed"){
+        if(ok_cancel_button == false && gmt_offset_hours < 12){  //change minutes
+            gmt_offset_hours ++ ;
+        }
+        if(ok_cancel_button == true && gmt_offset_minutes <= 59){  //change minutes
+            gmt_offset_minutes ++ ;
+        }
+        if(gmt_offset_minutes == 60){
+          gmt_offset_minutes = 0;
+          if(gmt_offset_hours < 12){
+         gmt_offset_hours ++ ;}
+        }
+    }
+
+    if(down == "pressed"){
+        if(ok_cancel_button == true && gmt_offset_minutes > 0){  
+            gmt_offset_minutes -- ;
+        }
+        if(ok_cancel_button == false && gmt_offset_hours > -12){  
+            gmt_offset_hours -- ;
+        }
+
+    }    
+
+    if(ok_cancel_button == false){
+    display.drawLine(25, 40, 50, 40, 1);
+    }
+    else{
+    display.drawLine(75, 40, 100, 40, 1);
+    }
+    display.setTextSize(1);
+    display.drawRoundRect(42, 48, 40, 15, 5, 1);
+    display.setCursor(57, 51);
+    display.print("ok");
+    display.display();
+    
+    
+    
+    if(left == "pressed" && ok_cancel_button == true){
+      ok_cancel_button = false;
+    }
+    if(right == "pressed" && ok_cancel_button == false){
+      ok_cancel_button = true;
+    }
+
+    if(selecT == "pressed" && millis() > last_press_time + 100){
+        time_partitioned = false;
+        gmt_offset = gmt_offset_hours*3600 + gmt_offset_minutes*60 ;
+        rtc.offset = gmt_offset ;
+        saves.putLong("gmt_offset",gmt_offset);
+       // Serial.println(gmt_offset);
+        last_press_time = millis();
+        options_select_mode = 0;
+    }
+
+
+
+
+}
+
+
+
 if(options_select_mode == 8){
     if(time_partitioned == false){
     String screen_off_time_string = partition_time(saves_screen_off_time/1000);
     screen_off_seconds = screen_off_time_string.substring(6,8).toInt();
-    //Serial.println(screen_off_time_string.substring(6,8));
-   // Serial.println(screen_off_time_string.substring(3,5));
     screen_off_minutes = screen_off_time_string.substring(3,5).toInt();
     time_partitioned = true;
     }
@@ -1112,7 +1189,7 @@ if(options_select_mode == 8){
         if(ok_cancel_button == false && screen_off_minutes > 0){  //change minutes
             screen_off_minutes -- ;
         }
-        if(ok_cancel_button == true && screen_off_minutes > 0){  //change minutes
+        if(ok_cancel_button == true && screen_off_seconds > 0){  //change minutes
             screen_off_seconds -- ;
         }
 
@@ -1152,9 +1229,13 @@ if(options_select_mode == 8){
 
 
 
+
 }
 
-if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8){
+
+
+
+if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8 && options_select_mode!= 2){
     last_select_mode = select_mode;
     select_mode = 5;
     error_message_text = "not done yet";
@@ -1221,8 +1302,9 @@ void setup() {
 
     saves.begin("settings", false);
    //settings values init
-   saves.getUInt("gmt", 7200);
-   saves_screen_off_time = saves.getUInt("screen_off_time", 30000);
+   saves_screen_off_time = saves.getUInt("screen_off_time", 30000); // in micro-seconds
+   rtc.offset = gmt_offset = saves.getLong("gmt_offset", 3600); // in seconds
+   
 }
 
 
