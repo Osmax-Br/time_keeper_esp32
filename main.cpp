@@ -174,7 +174,7 @@ const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php";
 //drop screen vars
 
 //the name of options
-String options_list[4][4] = {{"End day&upload","change Time zone","turn server off","change clock"},{"ssid","password","server","screen turn off"},{"alarm","email","reset activity","test rgb"},{"","","",""}};
+String options_list[4][4] = {{"End day&upload","change Time zone","server off-on","chose temp unit"},{"ssid & password","turn IR off-on","server's ip","screen turn off"},{"alarm","email","reset activity","test rgb"},{"Reset All","internal temp","buzzer off","Contanct me"}};
 int scroll_bar_place = 1; // for moving the cursor
 int options_outer_counter = 0;  // counting the pages
 int block_cursor = 0; // conuting the inner values inside page
@@ -1217,13 +1217,22 @@ if(options_select_mode == 8){
     }
 
     if(selecT == "pressed" && millis() > last_press_time + 100){
-        //saves.putInt("screen_off_time",((screen_off_minutes*60) + screen_off_seconds)*1000);
-        time_partitioned = false;
         saves_screen_off_time = ((screen_off_minutes*60) + screen_off_seconds)*1000;
+        if(saves_screen_off_time < 5000){
+            saves_screen_off_time = 30000;
+            last_select_mode = select_mode;
+            select_mode = 5;
+            error_message_text = "minimum value is \n      5 seconds !";
+            options_select_mode = 0;
+            last_press_time = millis();
+            time_partitioned = false;
+        }
+        else if(saves_screen_off_time >= 5000){
         saves.putUInt("screen_off_time",saves_screen_off_time);
         Serial.println(saves_screen_off_time);
         last_press_time = millis();
-        options_select_mode = 0;
+        time_partitioned = false;
+        options_select_mode = 0;}
     }
 
 
