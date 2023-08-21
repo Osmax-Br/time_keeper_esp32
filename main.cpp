@@ -170,7 +170,7 @@ String var_processor(const String& var){
 //**************************************************************
 //multi-tasking
 TaskHandle_t ntp_time;  // getting the tine from internet 
-
+TaskHandle_t buzzer_tone;
 
 //************************************************************
 // sql vars
@@ -212,6 +212,11 @@ int current_rgb = 0;  // this is for test rgb option
 // prefrences vars
 Preferences saves;
 
+//***************************************************
+//buzzer vars
+int buzzerpin = 23;
+String buzzer_tone_select = "" ;
+
 
 
 
@@ -244,7 +249,92 @@ void rgb_display(int rgb_value_index){  // we did 255 - valie because the led is
 
 }
 
+void buzzer_tone_function(void * pvParameters){ //buzzer tone
+    for(;;) {
+//void resume_tone(int buzzerpin){
+  if(buzzer_tone_select == "resume"){
+  int buzzerState = LOW;             // ledState used to set the LED
+  unsigned long previousMillis = 0;
+  const long interval = 80;
+  for(int i =0 ; i<4 ;){
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    if (buzzerState == LOW) {
+      buzzerState = HIGH;
+    } else {
+      buzzerState = LOW;}
+    digitalWrite(buzzerpin, buzzerState);
+    i++;}
+    }
+    buzzer_tone_select = "";
+  }
+/////////////////////////////////////
+//void pause_tone(int buzzerpin){
+  else if(buzzer_tone_select == "pause"){
+  int buzzerState = 0;             // ledState used to set the LED
+  unsigned long previousMillis = 0;
+  const long interval = 220;
+  for(int i = 0 ; i<2 ; ){
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    if (buzzerState == 0) {
+      buzzerState = 1;
+    } else {
+      buzzerState = 0;}
+      i++;
+    digitalWrite(buzzerpin, buzzerState);}}
+    buzzer_tone_select = "";
+}
 
+
+
+else if(buzzer_tone_select == "one_time_short"){
+  int buzzerState = 0;             // ledState used to set the LED
+  unsigned long previousMillis = 0;
+  const long interval = 10;
+  for(int i = 0 ; i<2 ; ){
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    if (buzzerState == 0) {
+      buzzerState = 1;
+    } else {
+      buzzerState = 0;}
+      i++;
+    digitalWrite(buzzerpin, buzzerState);}}
+    buzzer_tone_select = "";
+}
+
+else if(buzzer_tone_select == "one_time_long"){
+  int buzzerState = 0;             // ledState used to set the LED
+  unsigned long previousMillis = 0;
+  const long interval = 25;
+  for(int i = 0 ; i<2 ; ){
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    if (buzzerState == 0) {
+      buzzerState = 1;
+    } else {
+      buzzerState = 0;}
+      i++;
+    digitalWrite(buzzerpin, buzzerState);}}
+    buzzer_tone_select = "";
+}
+
+
+
+
+
+
+else{}
+
+
+
+
+}} 
 
 
 
@@ -509,13 +599,37 @@ if(IrReceiver.decodedIRData.decodedRawData == 4010819648){
   }
         IrReceiver.decodedIRData.decodedRawData = 0;
 }
+if(IrReceiver.decodedIRData.decodedRawData == 3910549568){
+        paused = true;
+        buzzer_tone_select = "pause";
+        IrReceiver.decodedIRData.decodedRawData = 0;
+}
+if(IrReceiver.decodedIRData.decodedRawData == 3893837888){
+  if(chosen_value != "Nothing"){
+        paused = false;
+        buzzer_tone_select = "resume";}
+        IrReceiver.decodedIRData.decodedRawData = 0;
+}
+if(IrReceiver.decodedIRData.decodedRawData == 3877126208){
+        if(paused == true){
+          buzzer_tone_select = "pause";
+        }
+        else if (paused== false){
+          buzzer_tone_select = "resume";
+        }
+        IrReceiver.decodedIRData.decodedRawData = 0;
+}
 
+
+// red 39105495680
+// gre 3893837888
+// yellow 38771262080
 
 
 
   if (IrReceiver.decode()) {
 
-      //Serial.print(IrReceiver.decodedIRData.decodedRawData);
+      //Serial.println(IrReceiver.decodedIRData.decodedRawData);
       // USE NEW 3.x FUNCTIONS
        //IrReceiver.printIRResultShort(&Serial); // Print complete received data in one line
       // IrReceiver.checkForRepeatSpaceTicksAndSetFlag(10);
@@ -1363,6 +1477,7 @@ void setup() {
   pinMode(PIN_RED,   OUTPUT);
   pinMode(PIN_GREEN, OUTPUT);
   pinMode(PIN_BLUE,  OUTPUT);
+  pinMode(buzzerpin,OUTPUT);
 
   timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
   timerAttachInterrupt(timer, &onTimer, true); 	// Attach interrupt
@@ -1376,6 +1491,7 @@ void setup() {
 
  
    xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
+  xTaskCreatePinnedToCore(buzzer_tone_function,"buzzer_tone",10000,NULL,0,&buzzer_tone,1); // create a seperate task for buzzer tones
    if(WiFi.status() == WL_CONNECTED && server_started == false){
    web_server();
    server_started = true ;
@@ -1407,10 +1523,14 @@ ir_button();
 
 if(selecT == "pressed" || down == "pressed" || up == "pressed" || right == "pressed" || left == "pressed"){
   rgb_display(6);
+  buzzer_tone_select = "one_time_short";
 }
 if(selecT == "long_pressed" || down == "long_pressed" || up == "long_pressed" || right == "long_pressed" || left == "long_pressed"){
   rgb_display(2);
+  buzzer_tone_select = "one_time_long";
+  //resume_tone(buzzerpin);
 }
+
 
 
 // adding the values of bounce press vars
