@@ -18,7 +18,7 @@ _nowpress = digitalRead(_pin);
   if(_lastpress == 1 && _nowpress ==0){
     _lastpress = 0;
     if(millis()- _presstime < 300){ // the duration of the normal press (changing this changes also the duration of long press)
-      if(millis() > last_press_time + 500){ //for ignoring dual presses at the same time
+      if(millis() > last_press_time + 50){ //for ignoring dual presses at the same time
     before_last_press_time = last_press_time;
     return_var = "pressed";
     last_press_time = millis(); //updating last time pressed

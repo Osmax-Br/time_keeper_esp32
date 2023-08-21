@@ -54,9 +54,9 @@ int filled_rect = -1 ; //for inverting text
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
 const int pages = 4; // ui pages number
 int current_page = 0; // for navigation
-String str[pages][12] = {{"school","mosque","sleep","musiq","eat","anime","bath","out","face","utube","quran","study"},
-{"arabic","french","math","phys","chimst","scienc","draw","cf","python","esp32","book","minec"},
-{"tidy","fix","souq","/","/","/","famlyM","famlyF","edit","cook","/","/"},
+String str[pages][12] = {{"school","mosque","sleep","music","eat","anime","bath","out","face","youtube","quran","study"},
+{"arabic","french","math","physics","chimstry","science","draw","code forces","python","esp32","book","minecraft"},
+{"tidy","fix","souq","/","/","/","famly Mother","famly Father","edit","cook","/","/"},
 {"/","/","/","/","/","/","/","/","/","/","/","/"}};
 int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},{42,17,43,18},{84,17,43,18}},{{0,33,43,17},{42,33,43,17},{84,33,43,17}},{{0,49,43,15},{42,49,43,15},{84,49,43,15}}};  //the data of each rectangular in the grid eg: width,height,x,y
 int lastpress,press_state = 0; //for button class
@@ -80,6 +80,9 @@ int last_rtc_update = 0;    // for not consuming the cpu for updating rtc
 //network credentials
 const char *ssid     = "lemone"; 
 const char *password = "Hta87#Mi00";
+String ssid_ ,password_ ;
+bool ssid_set = true;
+bool wifi_set_mode,password_set = false;
 // for setting specific ip address
 IPAddress local_IP(192, 168, 1, 199); //192.168.1.199
 IPAddress gateway(192, 168, 1, 1);
@@ -133,6 +136,7 @@ String chosen_value_web_var(){
 
 }
 String pause_web_var(){
+  if(wifi_set_mode == false){
   if(paused == true){
     if(data_storage[current_page][data_storage_index][0] == 0 && data_storage[current_page][data_storage_index][1] && data_storage[current_page][data_storage_index][2]){
       return "Start";}
@@ -141,10 +145,15 @@ String pause_web_var(){
   }
   else if(paused == false ){
     return "Pause";
-  }
- else{
-  return "ERROR !";
+  }}
+  else if(wifi_set_mode == true){
+if(ssid_set == true && password_set == false){
+    return "SSID";
  } 
+if(ssid_set == false &&password_set == true){
+  return "Password";
+ }}
+ 
 }
 String var_processor(const String& var){
   if(var == "Timer"){
@@ -202,6 +211,28 @@ int current_rgb = 0;  // this is for test rgb option
 //***************************************************
 // prefrences vars
 Preferences saves;
+
+
+
+
+
+//internal temp sensor vars
+#ifdef __cplusplus
+
+extern "C" {
+
+#endif
+
+uint8_t temprature_sens_read();
+
+#ifdef __cplusplus
+
+}
+
+#endif
+
+uint8_t temprature_sens_read();
+
 
 
 
@@ -324,6 +355,7 @@ void web_server(){
     String inputMessage = "";
     String inputParam;
     // GET input1 value on <ESP_IP>/get?input1=<inputMessage>
+    if(wifi_set_mode == false){
     if (request->hasParam("input1")) {
       inputMessage = request->getParam("input1")->value();
       inputParam = "input1";
@@ -337,7 +369,27 @@ void web_server(){
     current_page = 3 ;
     str[3][chosen_value_index] = inputMessage;
     chosen_value = str[3][chosen_value_index];
-      }
+      }}
+    else if(wifi_set_mode == true ){
+        if(ssid_set == true){
+    if (request->hasParam("input1")) {
+      inputMessage = request->getParam("input1")->value();
+      inputParam = "input1";
+      ssid_ = inputMessage ;
+      ssid_set = false;
+      }}
+    else if(ssid_set == false){
+    if (request->hasParam("input1")) {
+      inputMessage = request->getParam("input1")->value();
+      inputParam = "input1";
+      password_ = inputMessage ;
+      password_set = true;
+      //ssid_set = true;
+      }        
+
+
+
+    }}
     request->send(200, "text/html", " <meta http-equiv='refresh' content='0; URL=http://192.168.1.199/'> ");
   });
  
@@ -546,10 +598,10 @@ void print_label(int current_page,int filled_rect_x , int filled_rect_y) { //pri
   display.setCursor(4 + 41 * _x,3 + (17 * _y) +i2); //setting writing cursor
   if(_x == filled_rect_x && _y==filled_rect_y){ //&& selecT_bounce == 1){   //this is for inverting the text color while selecting
   display.setTextColor(BLACK);
-  display.print(str[current_page][i]);} //printing the labels
+  display.print(str[current_page][i].substring(0,6));} //printing the labels
   else{
  display.setTextColor(WHITE);
-  display.print(str[current_page][i]);
+  display.print(str[current_page][i].substring(0,6));
   }
   }
 }
@@ -1235,16 +1287,40 @@ if(options_select_mode == 8){
         options_select_mode = 0;}
     }
 
+}
 
 
 
-
+if(options_select_mode == 14){
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.setCursor(0, 0);
+    display.println("Esp 32 internal temp");
+    display.setCursor(0, 20);
+    display.setTextSize(3);
+    display.printf("%.01f C%c",(temprature_sens_read() - 32)/1.8,(char)247);
+    display.display();
 }
 
 
 
 
-if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8 && options_select_mode!= 2){
+if(options_select_mode == 5){
+  wifi_set_mode = true;
+  if(up == "long_pressed" || (password_set == true)){
+    ssid_set = true;
+    password_set = false;
+    wifi_set_mode = false;
+    Serial.printf("%s , %s \n",ssid_,password_);
+    options_select_mode = 0;
+  }
+  
+}
+
+
+if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8 && options_select_mode!= 2 && options_select_mode!= 14 && options_select_mode != 5){
     last_select_mode = select_mode;
     select_mode = 5;
     error_message_text = "not done yet";
