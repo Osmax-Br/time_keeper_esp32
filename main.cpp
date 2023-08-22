@@ -183,7 +183,7 @@ const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php";
 //drop screen vars
 
 //the name of options
-String options_list[4][4] = {{"End day&upload","change Time zone","server off-on","chose temp unit"},{"ssid & password","turn IR off-on","server's ip","screen turn off"},{"alarm","email","reset activity","test rgb"},{"Reset All","internal temp","buzzer off","Contanct me"}};
+String options_list[4][4] = {{"End day&upload","change Time zone","server off-on","chose temp unit"},{"ssid & password","turn IR off-on","server's ip","screen turn off"},{"alarm","email","reset activity","test rgb"},{"Reset All","internal temp","buzzer settings","Contanct me"}};
 int scroll_bar_place = 1; // for moving the cursor
 int options_outer_counter = 0;  // counting the pages
 int block_cursor = 0; // conuting the inner values inside page
@@ -216,8 +216,10 @@ Preferences saves;
 //buzzer vars
 int buzzerpin = 23;
 String buzzer_tone_select = "" ;
-
-
+int one_time_short_interval = 10 ;
+int one_time_long_interval = 25 ;
+int error_interval = 100 ;
+bool error_buzzer_on = false;
 
 
 
@@ -323,7 +325,22 @@ else if(buzzer_tone_select == "one_time_long"){
     digitalWrite(buzzerpin, buzzerState);}}
     buzzer_tone_select = "";
 }
-
+else if(buzzer_tone_select == "error"){
+  int buzzerState = 0;             // ledState used to set the LED
+  unsigned long previousMillis = 0;
+  const long interval = 50;
+  for(int i = 0 ; i<20 ; ){
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    if (buzzerState == 0) {
+      buzzerState = 1;
+    } else {
+      buzzerState = 0;}
+      i++;
+    digitalWrite(buzzerpin, buzzerState);}}
+    buzzer_tone_select = "";
+}
 
 
 
@@ -373,6 +390,7 @@ void post(int page , int activity , int day_of_upload , int month_of_upload , in
 String get(){
   String return_var = "";
       if(WiFi.status() != WL_CONNECTED){
+          buzzer_tone_select = "error";
           last_select_mode = select_mode;
           select_mode = 5;
           error_message_text = "connect to wifi";
@@ -434,9 +452,11 @@ void web_server(){
    server.on("/PauseBtn", HTTP_GET, [] (AsyncWebServerRequest *request) {
     if(paused==true && chosen_value != "Nothing"){
         paused = false;
+        buzzer_tone_select = "resume";
       }
     else if(paused == false){
         paused = true;
+        buzzer_tone_select = "pause";
       } 
     
     request->send(200, "text/plain", "ok");
@@ -501,10 +521,11 @@ String partition_time(long time){
 
 
 
-
+int last_buzzer_time = 0;
 
 // error message function
 void error_message(String error_text_message,int last_select_mode){
+  
   if(select_mode == 5){
   rgb_display(0);
   display.setTextSize(1);
@@ -516,7 +537,9 @@ void error_message(String error_text_message,int last_select_mode){
   display.print("ok");
   display.display();
   
+  
   if(selecT == "pressed" && millis() > last_press_time + 100){
+    //error_buzzer_on = false;
     display.clearDisplay();
     select_mode = last_select_mode;
     last_select_mode = 0;
@@ -815,6 +838,7 @@ void main_screen(){
  if(selecT == "pressed" && chosen_value=="Nothing" && millis() > last_press_time + 100){
     last_select_mode = select_mode;
     select_mode = 5;
+    buzzer_tone_select = "error";
     error_message_text = "choose something";
     last_press_time = millis();
   }
@@ -979,6 +1003,7 @@ if(got_the_date_from_db == false){
   if(rtc_time_updated == false && millis() > last_press_time + 100){
     last_select_mode = select_mode;
     select_mode = 5;
+    buzzer_tone_select = "error";
     error_message_text = "please update time";
     options_select_mode = 0;
     last_press_time = millis();
@@ -1107,6 +1132,7 @@ if(got_the_date_from_db == false){
      int activity_print_counter = 0;  // for printing the progress bar on screen
     rgb_display(5);
     paused = true;
+    buzzer_tone_select = "pause";
     for(int i = 0; i<4 ; i++){  // 4 pages
       for(int j =0 ; j<12 ; j++){ // 12 activities
           post(i,j,day_of_upload,month_of_upload,year_of_upload);      // the actual post function
@@ -1223,6 +1249,7 @@ if(options_select_mode == 11){
           last_select_mode = select_mode;
           select_mode = 5;
           error_message_text = "choose an activity";
+          buzzer_tone_select = "error";
           options_select_mode = 11;
           last_press_time = millis();
       }
@@ -1233,6 +1260,7 @@ if(options_select_mode == 11){
        data_storage[current_page][data_storage_index][2] = 0 ;
        portEXIT_CRITICAL_ISR(&timerMux);
        paused = true ;
+       buzzer_tone_select = "pause";
        last_press_time = millis();
        options_select_mode = 0;
       }
@@ -1389,6 +1417,7 @@ if(options_select_mode == 8){
             last_select_mode = select_mode;
             select_mode = 5;
             error_message_text = "minimum value is \n      5 seconds !";
+            buzzer_tone_select = "error";
             options_select_mode = 0;
             last_press_time = millis();
             time_partitioned = false;
@@ -1438,6 +1467,7 @@ if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode 
     last_select_mode = select_mode;
     select_mode = 5;
     error_message_text = "not done yet";
+    buzzer_tone_select = "error";
     options_select_mode = 0;
     last_press_time = millis();
 }
@@ -1570,9 +1600,11 @@ else if(select_mode == 0){
   if(selecT == "pressed" && (select_mode == 0 || select_mode == 1) && chosen_value != "Nothing"){ // pressing sclect while screen is off doesnt change pause value (select_mode 3)
     if(paused == false){
       paused = true;
+      buzzer_tone_select = "pause";
     }
   else if(paused == true){
     paused = false;
+    buzzer_tone_select = "resume";
   }  
   }
 }

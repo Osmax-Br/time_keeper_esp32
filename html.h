@@ -75,11 +75,7 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent
 }
-.ssid_activity{
- background: -webkit-linear-gradient(white, #38495a);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent
-}
+
 
 #stars {
   width: 1px;
@@ -158,7 +154,7 @@ body {
   <p><button id = "btn" class = "pause_button" onclick="toggleCheckbox()"><span id="btn">%Pause%</button></p>
   <br>
   <form action="/choseee">
-    <span id="ssid_activity" class = "ssid_activity">%Ssid_activity%</span> : <input type="text" name="input1" class = "input">
+    Write input : <input type="text" name="input1" class = "input">
     <input type="submit" value="Submit" class = "submit_button">
   </form>
 </body>
