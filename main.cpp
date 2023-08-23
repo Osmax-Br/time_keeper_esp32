@@ -183,7 +183,7 @@ const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php";
 //drop screen vars
 
 //the name of options
-String options_list[4][4] = {{"End day&upload","change Time zone","server off-on","chose temp unit"},{"ssid & password","turn IR off-on","server's ip","screen turn off"},{"alarm","email","reset activity","test rgb"},{"Reset All","internal temp","buzzer settings","Contanct me"}};
+String options_list[4][4] = {{"End day&upload","change Time zone","server off-on","chose temp unit"},{"ssid & password","IR settings","server's ip","screen turn off"},{"alarm","email","reset activity","test rgb"},{"Reset All","internal temp","buzzer settings","Contanct me"}};
 int scroll_bar_place = 1; // for moving the cursor
 int options_outer_counter = 0;  // counting the pages
 int block_cursor = 0; // conuting the inner values inside page
@@ -952,90 +952,261 @@ void buzzer_change_state(bool state,const char* key){
   }
 }
 
-void drop_screen(){
-  if(options_select_mode == 0){ // main options menu
+//*******************************************************
+
+void gmt_settings(){
+if(time_partitioned == false){
+    String gmt_offset_string = partition_time(gmt_offset);
+    gmt_offset_minutes = gmt_offset_string.substring(3,5).toInt();
+    gmt_offset_hours = gmt_offset_string.substring(0,2).toInt();
+    time_partitioned = true;
+    }
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.setCursor(0, 0);
+    display.println("     GMT offset");
+    display.setCursor(20, 15);
+    display.setTextSize(3);
+    display.printf("%02i:%02i",gmt_offset_hours,gmt_offset_minutes);
+    if(up == "pressed"){
+        if(ok_cancel_button == false && gmt_offset_hours < 12){  //change minutes
+            gmt_offset_hours ++ ;
+        }
+        if(ok_cancel_button == true && gmt_offset_minutes <= 59){  //change minutes
+            gmt_offset_minutes ++ ;
+        }
+        if(gmt_offset_minutes == 60){
+          gmt_offset_minutes = 0;
+          if(gmt_offset_hours < 12){
+         gmt_offset_hours ++ ;}
+        }
+    }
+
+    if(down == "pressed"){
+        if(ok_cancel_button == true && gmt_offset_minutes > 0){  
+            gmt_offset_minutes -- ;
+        }
+        if(ok_cancel_button == false && gmt_offset_hours > -12){  
+            gmt_offset_hours -- ;
+        }
+
+    }    
+
+    if(ok_cancel_button == false){
+    display.drawLine(25, 40, 50, 40, 1);
+    }
+    else{
+    display.drawLine(75, 40, 100, 40, 1);
+    }
+    display.setTextSize(1);
+    display.drawRoundRect(42, 48, 40, 15, 5, 1);
+    display.setCursor(57, 51);
+    display.print("ok");
+    display.display();
+    
+    
+    
+    if(left == "pressed" && ok_cancel_button == true){
+      ok_cancel_button = false;
+    }
+    if(right == "pressed" && ok_cancel_button == false){
+      ok_cancel_button = true;
+    }
+
+    if(selecT == "pressed" && millis() > last_press_time + 100){
+        time_partitioned = false;
+        gmt_offset = gmt_offset_hours*3600 + gmt_offset_minutes*60 ;
+        rtc.offset = gmt_offset ;
+        saves.putLong("gmt_offset",gmt_offset);
+       // Serial.println(gmt_offset);
+        last_press_time = millis();
+        options_select_mode = 0;
+    }
+}
+
+//*******************************************************************************************
+
+void buzzer_settings(){
+    if(up == "pressed" && buzzer_settings_cursor != 0){
+    buzzer_settings_cursor --;
+  }
+  if(down == "pressed" && buzzer_settings_cursor != 3){
+    buzzer_settings_cursor ++;
+  }
+
+
+
+
+
+
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.setCursor(0, 2);
+    display.println("Buzzer always : ");
+
+
+
+    if(buzzer_settings_cursor == 0){
+    display.fillRoundRect(90, 0, 38, 12, 3, WHITE);
+    display.setCursor(100, 2);
+    display.setTextColor(BLACK);
+    display.print(buzzer_on_off(buzzer_always_on));}
+    else{
+    display.drawRoundRect(90, 0, 38, 12, 3, WHITE);
+    display.setCursor(100, 2);
+    display.setTextColor(WHITE);
+    display.print(buzzer_on_off(buzzer_always_on));
+    }
+
+
+
+    display.setTextColor(WHITE);
+    display.setCursor(0, 17);
+    display.print("error sound   :");
+
+
+
+
+    if(buzzer_settings_cursor == 1){
+    display.fillRoundRect(90, 15, 38, 12, 3, 1);
+    display.setCursor(100, 17);
+    display.setTextColor(BLACK);
+    display.print(buzzer_on_off(buzzer_error_sound));}
+    else{
+    display.drawRoundRect(90, 15, 38, 12, 3, 1);
+    display.setCursor(100, 17);
+    display.setTextColor(WHITE);
+    display.print(buzzer_on_off(buzzer_error_sound));
+    }
+
+
+
+
+    display.setTextColor(WHITE);
+    display.setCursor(0, 32);
+    display.print("pause/resume  :");
+
+
+    if(buzzer_settings_cursor == 2){
+    display.fillRoundRect(90, 30, 38, 12, 3, 1);
+    display.setCursor(100, 32);
+    display.setTextColor(BLACK);
+    display.print(buzzer_on_off(buzzer_pause_sound));
+    }
+    else{
+    display.drawRoundRect(90, 30, 38, 12, 3, 1);
+    display.setCursor(100, 32);
+    display.setTextColor(WHITE);
+    display.print(buzzer_on_off(buzzer_pause_sound));
+    }
+    
+
+
+
+
+
+    display.setTextColor(WHITE);
+    display.setCursor(0, 47);
+    display.print("press sound   :");
+
+
+
+if(buzzer_settings_cursor == 3){
+    display.fillRoundRect(90, 45, 38, 12, 3, 1);
+    display.setCursor(100, 47);
+    display.setTextColor(BLACK);
+    display.print(buzzer_on_off(buzzer_press_sound));
+}
+else{
+    display.drawRoundRect(90, 45, 38, 12, 3, 1);
+    display.setCursor(100, 47);
+    display.setTextColor(WHITE);
+    display.print(buzzer_on_off(buzzer_press_sound));
+}
+    
+if(left == "pressed" || right == "pressed"){
+    if(buzzer_settings_cursor == 0){
+       if(buzzer_always_on == true){
+        buzzer_always_on = false;
+        saves.putBool("b_always_on",false);
+        }
+        else if(buzzer_always_on == false){
+          buzzer_always_on = true;
+          saves.putBool("b_always_on",true);
+        }
+    }
+    else if(buzzer_settings_cursor == 1){
+       // buzzer_change_state(buzzer_error_sound,"b_error_sound");
+       if(buzzer_error_sound == false){
+        buzzer_error_sound = true;
+       }
+       else if(buzzer_error_sound == true){
+        buzzer_error_sound = false;
+       }
+         saves.putBool("b_error_sound",buzzer_error_sound);
+    }
+    else if(buzzer_settings_cursor == 2){
+       // buzzer_change_state(buzzer_pause_sound,"b_pause_sound");
+        if(buzzer_pause_sound == false){
+        buzzer_pause_sound = true;
+       }
+       else if(buzzer_pause_sound == true){
+        buzzer_pause_sound = false;
+       }
+         saves.putBool("b_pause_sound",buzzer_pause_sound);
+    }   
+    else if(buzzer_settings_cursor == 3){
+      if(buzzer_press_sound == false){
+        buzzer_press_sound = true;
+       }
+       else if(buzzer_press_sound == true){
+        buzzer_press_sound = false;
+       }
+       // buzzer_change_state(buzzer_press_sound,"b_press_sound");
+        saves.putBool("b_press_sound",buzzer_press_sound);
+    }       
+
+
+
+}    
+
+    display.display();
+
+}
+
+
+//**********************************************************
+
+void rgb_settings(){
+    display.clearDisplay();
+  if(select_mode == 4 && right == "pressed" && options_select_mode == 12 && current_rgb != 7){
+   current_rgb ++;
+}
+if(select_mode == 4 && options_select_mode == 12 && left == "pressed" && current_rgb != 0){
+   current_rgb --;
+}
+  rgb_display(current_rgb);
+  display.setCursor(30,10);
+  display.setTextColor(WHITE);
+  display.setTextSize(2);
+  display.print(rgb_values_name[current_rgb]);
+  display.setCursor(15,40);
   display.setTextSize(1);
-  // rect loop
-  for(int i =0 ;i<=4 ; i++){
-    if(i==block_cursor){  // fill the rect white when cursor passes
-      display.fillRect(0,16*i,110,16,WHITE);
-    }
-    else{
-      display.drawRect(0,16*i,110,16,WHITE);}
-      }
-  int options_inner_counter = 0;   // internal var only , for inverting text color
-  //text loop
-  for(int i=5;i<=50;i+=15){
-     display.setCursor(9,i+1);
-     if(options_inner_counter == block_cursor){ //when cursor passes make rect text black
-      display.setTextColor(BLACK);
-     }
-     else{
-      display.setTextColor(WHITE);  // inverting text
-     }
-    display.print(options_list[options_outer_counter][options_inner_counter]);  // print option labels
-    options_inner_counter++;  // print next label inside the same page
-    }
-  
-  
-  for(int i=0 ; i <=64 ; i+=8){   // the dots
-    display.fillRect(122,i,2,2,WHITE);
-          }
-// move up
-  if(up == "pressed"){
-    if(options_outer_counter + block_cursor != 0){  //for not going outside the screen
-    block_cursor --;}// move up
+  display.printf("(%i ,  %i ,  %i)",rgb_values[current_rgb][0],rgb_values[current_rgb][1],rgb_values[current_rgb][2]);
+  display.display();
+}
 
 
-    if(block_cursor == -1  && scroll_bar_place !=1){  // change page
-      block_cursor = 3; //the last option of the previous page
-    scroll_bar_place -= 10; // change the scroll_bar
-    options_outer_counter--;} // change page
-  }
-
-// move down (same way)
-  if(down == "pressed"){
-    if(options_outer_counter == 3 && block_cursor ==3){
-
-    }
-    else{
-    block_cursor ++ ;}
-    if(block_cursor == 4  && scroll_bar_place != 31 && options_outer_counter != 4){
-      block_cursor = 0;
-    scroll_bar_place += 10; 
-    options_outer_counter++;}
-  }
-  display.fillRoundRect(120,scroll_bar_place,5,20,5,WHITE);} // print the actual scroll bar
-  
+//**************************************************
 
 
 
- // if(selecT == "pressed" && options_outer_counter == 0 && block_cursor == 0 && options_select_mode == 0){ //entering the first option
-   // options_select_mode = 1;  // each one represents an option 
-   // last_press_time = millis(); // for not regestring multiple presses
-  //}
- 
-  if(selecT == "pressed" && options_select_mode == 0){ //entering the first option
-    int option_counter_temp = 0;
-    option_counter_temp = options_outer_counter*4;
-    option_counter_temp += block_cursor ;
-    option_counter_temp++ ;
-    last_press_time = millis(); // for not regestring multiple presses
-    options_select_mode = option_counter_temp;
-   // Serial.print(options_select_mode);
-  } 
+void select_and_upload_settings(){
 
-// for getting the date from the server just once when this menu is opened
-// not useful :)
-/*
-if(got_the_date_from_db == false){
-      current_get_day_and_month = get();  //update from server
-      got_the_date_from_db = true ; // updated! 
-    }
-*/
-
-// first option menu (end & upload)
-  if(options_select_mode == 1){ //first menu + updated date
   if(rtc_time_updated == false && millis() > last_press_time + 100){
     last_select_mode = select_mode;
     select_mode = 5;
@@ -1195,44 +1366,14 @@ if(got_the_date_from_db == false){
     last_press_time = millis();
   }}
   
-  }
-
-if(options_select_mode == 12){
-  display.clearDisplay();
-  if(select_mode == 4 && right == "pressed" && options_select_mode == 12 && current_rgb != 7){
-   current_rgb ++;
-}
-if(select_mode == 4 && options_select_mode == 12 && left == "pressed" && current_rgb != 0){
-   current_rgb --;
-}
-  rgb_display(current_rgb);
-  display.setCursor(30,10);
-  display.setTextColor(WHITE);
-  display.setTextSize(2);
-  display.print(rgb_values_name[current_rgb]);
-  display.setCursor(15,40);
-  display.setTextSize(1);
-  display.printf("(%i ,  %i ,  %i)",rgb_values[current_rgb][0],rgb_values[current_rgb][1],rgb_values[current_rgb][2]);
-  display.display();
+  
 }
 
 
-int address_num1 = 1;
-int address_num2 = 11;
-if(options_select_mode == 8){
-    display.setCursor(30,0);
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
-    display.print("192.168.");
-    display.setTextSize(2);
-    display.print("1.11");
+//***********************************************************************************
+void activity_reset_settings(){
 
-}
-
-
-
-if(options_select_mode == 11){
-    display.clearDisplay();
+      display.clearDisplay();
     display.setTextColor(WHITE);
     display.setTextSize(1);
     display.setFont(NULL);
@@ -1307,86 +1448,94 @@ if(options_select_mode == 11){
     display.display();
 }
 
-if(options_select_mode == 2){
-    if(time_partitioned == false){
-    String gmt_offset_string = partition_time(gmt_offset);
-    gmt_offset_minutes = gmt_offset_string.substring(3,5).toInt();
-    gmt_offset_hours = gmt_offset_string.substring(0,2).toInt();
-    time_partitioned = true;
-    }
+//***************************************************************************
+
+void esp32_internal_temp_settings(){
     display.clearDisplay();
     display.setTextColor(WHITE);
     display.setTextSize(1);
     display.setFont(NULL);
     display.setCursor(0, 0);
-    display.println("     GMT offset");
-    display.setCursor(20, 15);
+    display.println("Esp 32 internal temp");
+    display.setCursor(0, 20);
     display.setTextSize(3);
-    display.printf("%02i:%02i",gmt_offset_hours,gmt_offset_minutes);
-    if(up == "pressed"){
-        if(ok_cancel_button == false && gmt_offset_hours < 12){  //change minutes
-            gmt_offset_hours ++ ;
-        }
-        if(ok_cancel_button == true && gmt_offset_minutes <= 59){  //change minutes
-            gmt_offset_minutes ++ ;
-        }
-        if(gmt_offset_minutes == 60){
-          gmt_offset_minutes = 0;
-          if(gmt_offset_hours < 12){
-         gmt_offset_hours ++ ;}
-        }
-    }
-
-    if(down == "pressed"){
-        if(ok_cancel_button == true && gmt_offset_minutes > 0){  
-            gmt_offset_minutes -- ;
-        }
-        if(ok_cancel_button == false && gmt_offset_hours > -12){  
-            gmt_offset_hours -- ;
-        }
-
-    }    
-
-    if(ok_cancel_button == false){
-    display.drawLine(25, 40, 50, 40, 1);
-    }
-    else{
-    display.drawLine(75, 40, 100, 40, 1);
-    }
-    display.setTextSize(1);
-    display.drawRoundRect(42, 48, 40, 15, 5, 1);
-    display.setCursor(57, 51);
-    display.print("ok");
+    display.printf("%.01f C%c",(temprature_sens_read() - 32)/1.8,(char)247);
     display.display();
-    
-    
-    
-    if(left == "pressed" && ok_cancel_button == true){
-      ok_cancel_button = false;
-    }
-    if(right == "pressed" && ok_cancel_button == false){
-      ok_cancel_button = true;
-    }
-
-    if(selecT == "pressed" && millis() > last_press_time + 100){
-        time_partitioned = false;
-        gmt_offset = gmt_offset_hours*3600 + gmt_offset_minutes*60 ;
-        rtc.offset = gmt_offset ;
-        saves.putLong("gmt_offset",gmt_offset);
-       // Serial.println(gmt_offset);
-        last_press_time = millis();
-        options_select_mode = 0;
-    }
-
-
-
-
 }
 
+//***********************************************************************************************
+
+void settings_menu_navigation(){
+
+  display.setTextSize(1);
+  // rect loop
+  for(int i =0 ;i<=4 ; i++){
+    if(i==block_cursor){  // fill the rect white when cursor passes
+      display.fillRect(0,16*i,110,16,WHITE);
+    }
+    else{
+      display.drawRect(0,16*i,110,16,WHITE);}
+      }
+  int options_inner_counter = 0;   // internal var only , for inverting text color
+  //text loop
+  for(int i=5;i<=50;i+=15){
+     display.setCursor(9,i+1);
+     if(options_inner_counter == block_cursor){ //when cursor passes make rect text black
+      display.setTextColor(BLACK);
+     }
+     else{
+      display.setTextColor(WHITE);  // inverting text
+     }
+    display.print(options_list[options_outer_counter][options_inner_counter]);  // print option labels
+    options_inner_counter++;  // print next label inside the same page
+    }
+  
+  
+  for(int i=0 ; i <=64 ; i+=8){   // the dots
+    display.fillRect(122,i,2,2,WHITE);
+          }
+// move up
+  if(up == "pressed"){
+    if(options_outer_counter + block_cursor != 0){  //for not going outside the screen
+    block_cursor --;}// move up
 
 
-if(options_select_mode == 8){
-    if(time_partitioned == false){
+    if(block_cursor == -1  && scroll_bar_place !=1){  // change page
+      block_cursor = 3; //the last option of the previous page
+    scroll_bar_place -= 10; // change the scroll_bar
+    options_outer_counter--;} // change page
+  }
+
+// move down (same way)
+  if(down == "pressed"){
+    if(options_outer_counter == 3 && block_cursor ==3){
+
+    }
+    else{
+    block_cursor ++ ;}
+    if(block_cursor == 4  && scroll_bar_place != 31 && options_outer_counter != 4){
+      block_cursor = 0;
+    scroll_bar_place += 10; 
+    options_outer_counter++;}
+  }
+  display.fillRoundRect(120,scroll_bar_place,5,20,5,WHITE); // print the actual scroll bar
+  
+ 
+  if(selecT == "pressed" && options_select_mode == 0){ //entering the first option
+    int option_counter_temp = 0;
+    option_counter_temp = options_outer_counter*4;
+    option_counter_temp += block_cursor ;
+    option_counter_temp++ ;
+    last_press_time = millis(); // for not regestring multiple presses
+    options_select_mode = option_counter_temp;
+   // Serial.print(options_select_mode);
+}}
+
+
+//**************************************************************************************
+
+void screen_off_settings(){
+      if(time_partitioned == false){
     String screen_off_time_string = partition_time(saves_screen_off_time/1000);
     screen_off_seconds = screen_off_time_string.substring(6,8).toInt();
     screen_off_minutes = screen_off_time_string.substring(3,5).toInt();
@@ -1465,177 +1614,98 @@ if(options_select_mode == 8){
         time_partitioned = false;
         options_select_mode = 0;}
     }
+}
 
+//************************************************************************
+
+
+
+
+void drop_screen(){
+  if(options_select_mode == 0){ // main options menu
+    settings_menu_navigation();
+  } 
+
+// first option menu (end & upload)
+  if(options_select_mode == 1){ //first menu + updated date
+    select_and_upload_settings();
+  }
+
+if(options_select_mode == 12){
+ rgb_settings();
+}
+
+
+if(options_select_mode == 11){
+  activity_reset_settings();
+}
+
+if(options_select_mode == 2){
+    gmt_settings();
+}
+
+
+
+if(options_select_mode == 8){
+  screen_off_settings();
 }
 
 
 
 if(options_select_mode == 14){
-    display.clearDisplay();
-    display.setTextColor(WHITE);
-    display.setTextSize(1);
-    display.setFont(NULL);
-    display.setCursor(0, 0);
-    display.println("Esp 32 internal temp");
-    display.setCursor(0, 20);
-    display.setTextSize(3);
-    display.printf("%.01f C%c",(temprature_sens_read() - 32)/1.8,(char)247);
-    display.display();
+  esp32_internal_temp_settings();
 }
 
 if(options_select_mode == 15){
-  if(up == "pressed" && buzzer_settings_cursor != 0){
-    buzzer_settings_cursor --;
-  }
-  if(down == "pressed" && buzzer_settings_cursor != 3){
-    buzzer_settings_cursor ++;
-  }
-
-
-
-
-
-
-    display.clearDisplay();
-    display.setTextColor(WHITE);
-    display.setTextSize(1);
-    display.setFont(NULL);
-    display.setCursor(0, 2);
-    display.println("Buzzer always : ");
-
-
-
-    if(buzzer_settings_cursor == 0){
-    display.fillRoundRect(90, 0, 38, 12, 3, WHITE);
-    display.setCursor(100, 2);
-    display.setTextColor(BLACK);
-    display.print(buzzer_on_off(buzzer_always_on));}
-    else{
-    display.drawRoundRect(90, 0, 38, 12, 3, WHITE);
-    display.setCursor(100, 2);
-    display.setTextColor(WHITE);
-    display.print(buzzer_on_off(buzzer_always_on));
-    }
-
-
-
-    display.setTextColor(WHITE);
-    display.setCursor(0, 17);
-    display.print("error sound   :");
-
-
-
-
-    if(buzzer_settings_cursor == 1){
-    display.fillRoundRect(90, 15, 38, 12, 3, 1);
-    display.setCursor(100, 17);
-    display.setTextColor(BLACK);
-    display.print(buzzer_on_off(buzzer_error_sound));}
-    else{
-    display.drawRoundRect(90, 15, 38, 12, 3, 1);
-    display.setCursor(100, 17);
-    display.setTextColor(WHITE);
-    display.print(buzzer_on_off(buzzer_error_sound));
-    }
-
-
-
-
-    display.setTextColor(WHITE);
-    display.setCursor(0, 32);
-    display.print("pause/resume  :");
-
-
-    if(buzzer_settings_cursor == 2){
-    display.fillRoundRect(90, 30, 38, 12, 3, 1);
-    display.setCursor(100, 32);
-    display.setTextColor(BLACK);
-    display.print(buzzer_on_off(buzzer_pause_sound));
-    }
-    else{
-    display.drawRoundRect(90, 30, 38, 12, 3, 1);
-    display.setCursor(100, 32);
-    display.setTextColor(WHITE);
-    display.print(buzzer_on_off(buzzer_pause_sound));
-    }
-    
-
-
-
-
-
-    display.setTextColor(WHITE);
-    display.setCursor(0, 47);
-    display.print("press sound   :");
-
-
-
-if(buzzer_settings_cursor == 3){
-    display.fillRoundRect(90, 45, 38, 12, 3, 1);
-    display.setCursor(100, 47);
-    display.setTextColor(BLACK);
-    display.print(buzzer_on_off(buzzer_press_sound));
-}
-else{
-    display.drawRoundRect(90, 45, 38, 12, 3, 1);
-    display.setCursor(100, 47);
-    display.setTextColor(WHITE);
-    display.print(buzzer_on_off(buzzer_press_sound));
-}
-    
-if(left == "pressed" || right == "pressed"){
-    if(buzzer_settings_cursor == 0){
-       if(buzzer_always_on == true){
-        buzzer_always_on = false;
-        saves.putBool("b_always_on",false);
-        }
-        else if(buzzer_always_on == false){
-          buzzer_always_on = true;
-          saves.putBool("b_always_on",true);
-        }
-    }
-    else if(buzzer_settings_cursor == 1){
-       // buzzer_change_state(buzzer_error_sound,"b_error_sound");
-       if(buzzer_error_sound == false){
-        buzzer_error_sound = true;
-       }
-       else if(buzzer_error_sound == true){
-        buzzer_error_sound = false;
-       }
-         saves.putBool("b_error_sound",buzzer_error_sound);
-    }
-    else if(buzzer_settings_cursor == 2){
-       // buzzer_change_state(buzzer_pause_sound,"b_pause_sound");
-        if(buzzer_pause_sound == false){
-        buzzer_pause_sound = true;
-       }
-       else if(buzzer_pause_sound == true){
-        buzzer_pause_sound = false;
-       }
-         saves.putBool("b_pause_sound",buzzer_pause_sound);
-    }   
-    else if(buzzer_settings_cursor == 3){
-      if(buzzer_press_sound == false){
-        buzzer_press_sound = true;
-       }
-       else if(buzzer_press_sound == true){
-        buzzer_press_sound = false;
-       }
-       // buzzer_change_state(buzzer_press_sound,"b_press_sound");
-        saves.putBool("b_press_sound",buzzer_press_sound);
-    }       
-
-
-
-}    
-
-    display.display();
+  buzzer_settings();
 }
 
 
 
 if(options_select_mode == 5){
-  wifi_set_mode = true;
+    wifi_set_mode = true;
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.setCursor(0, 0);
+    display.print("Set wifi credentials");
+    display.setCursor(0, 10);
+    display.print("connect via phone to:");
+    display.setCursor(0, 25);
+    display.print("SSID : esp32");
+    display.setCursor(0, 38);
+    display.print("Pass : 123456789");
+        if(ok_cancel_button == false){
+    display.fillRoundRect(20, 45, 40, 15, 3, WHITE);
+    display.setCursor(23, 48);
+    display.setTextColor(BLACK);
+    display.print("Back");
+    display.setTextColor(WHITE);
+    display.drawRoundRect(70, 45, 40, 15, 3, 1);
+    display.setCursor(84, 48);
+    display.print("Next");}
+    else if(ok_cancel_button == true){
+    display.drawRoundRect(20, 45, 40, 15, 3, 1);
+    display.setCursor(23, 48);
+    display.setTextColor(WHITE);
+    display.print("Back");
+    display.fillRoundRect(70, 45, 40, 15, 3,WHITE);
+    display.setCursor(84, 48);
+    display.setTextColor(BLACK);
+    display.print("Next");
+    }
+
+
+
+
+    if(left == "pressed" && ok_cancel_button == true){
+      ok_cancel_button = false;
+    }
+    if(right == "pressed" && ok_cancel_button == false){
+      ok_cancel_button = true;
+    }
+    display.display();
   if(up == "long_pressed" || (password_set == true)){
     ssid_set = true;
     password_set = false;
