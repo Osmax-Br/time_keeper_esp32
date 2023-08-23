@@ -219,7 +219,13 @@ String buzzer_tone_select = "" ;
 int one_time_short_interval = 10 ;
 int one_time_long_interval = 25 ;
 int error_interval = 100 ;
-bool error_buzzer_on = false;
+bool buzzer_always_on = true;
+bool buzzer_error_sound = true;
+bool buzzer_pause_sound = true;
+bool buzzer_press_sound = true;
+int buzzer_settings_cursor = 0;
+
+
 
 
 
@@ -254,7 +260,7 @@ void rgb_display(int rgb_value_index){  // we did 255 - valie because the led is
 void buzzer_tone_function(void * pvParameters){ //buzzer tone
     for(;;) {
 //void resume_tone(int buzzerpin){
-  if(buzzer_tone_select == "resume"){
+  if(buzzer_tone_select == "resume" && buzzer_always_on == true && buzzer_pause_sound == true){
   int buzzerState = LOW;             // ledState used to set the LED
   unsigned long previousMillis = 0;
   const long interval = 80;
@@ -273,7 +279,7 @@ void buzzer_tone_function(void * pvParameters){ //buzzer tone
   }
 /////////////////////////////////////
 //void pause_tone(int buzzerpin){
-  else if(buzzer_tone_select == "pause"){
+  else if(buzzer_tone_select == "pause" && buzzer_always_on == true && buzzer_pause_sound == true){
   int buzzerState = 0;             // ledState used to set the LED
   unsigned long previousMillis = 0;
   const long interval = 220;
@@ -292,7 +298,7 @@ void buzzer_tone_function(void * pvParameters){ //buzzer tone
 
 
 
-else if(buzzer_tone_select == "one_time_short"){
+else if(buzzer_tone_select == "one_time_short" && buzzer_always_on == true && buzzer_press_sound == true){
   int buzzerState = 0;             // ledState used to set the LED
   unsigned long previousMillis = 0;
   const long interval = 10;
@@ -309,7 +315,7 @@ else if(buzzer_tone_select == "one_time_short"){
     buzzer_tone_select = "";
 }
 
-else if(buzzer_tone_select == "one_time_long"){
+else if(buzzer_tone_select == "one_time_long" && buzzer_always_on == true && buzzer_press_sound == true){
   int buzzerState = 0;             // ledState used to set the LED
   unsigned long previousMillis = 0;
   const long interval = 25;
@@ -325,7 +331,7 @@ else if(buzzer_tone_select == "one_time_long"){
     digitalWrite(buzzerpin, buzzerState);}}
     buzzer_tone_select = "";
 }
-else if(buzzer_tone_select == "error"){
+else if(buzzer_tone_select == "error" && buzzer_always_on == true && buzzer_error_sound == true){
   int buzzerState = 0;             // ledState used to set the LED
   unsigned long previousMillis = 0;
   const long interval = 50;
@@ -916,6 +922,36 @@ void temp_screen(){
     display.display();
 }
 
+
+
+
+
+String buzzer_on_off(bool state){
+  if(state == true){
+    return "On";
+  }
+  else if(state == false){
+    return "Off";
+  }
+
+}
+
+
+void buzzer_change_state(bool state,const char* key){
+  if(state == true){
+    //saves.putBool(key,false);
+    
+    state = false;
+    Serial.print(state);
+  }
+  else if(state == false){
+  //  Serial.println("switch");
+  //saves.putBool(key,true);
+    state = true;
+    Serial.print(state);
+  }
+}
+
 void drop_screen(){
   if(options_select_mode == 0){ // main options menu
   display.setTextSize(1);
@@ -1447,6 +1483,154 @@ if(options_select_mode == 14){
     display.display();
 }
 
+if(options_select_mode == 15){
+  if(up == "pressed" && buzzer_settings_cursor != 0){
+    buzzer_settings_cursor --;
+  }
+  if(down == "pressed" && buzzer_settings_cursor != 3){
+    buzzer_settings_cursor ++;
+  }
+
+
+
+
+
+
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.setCursor(0, 2);
+    display.println("Buzzer always : ");
+
+
+
+    if(buzzer_settings_cursor == 0){
+    display.fillRoundRect(90, 0, 38, 12, 3, WHITE);
+    display.setCursor(100, 2);
+    display.setTextColor(BLACK);
+    display.print(buzzer_on_off(buzzer_always_on));}
+    else{
+    display.drawRoundRect(90, 0, 38, 12, 3, WHITE);
+    display.setCursor(100, 2);
+    display.setTextColor(WHITE);
+    display.print(buzzer_on_off(buzzer_always_on));
+    }
+
+
+
+    display.setTextColor(WHITE);
+    display.setCursor(0, 17);
+    display.print("error sound   :");
+
+
+
+
+    if(buzzer_settings_cursor == 1){
+    display.fillRoundRect(90, 15, 38, 12, 3, 1);
+    display.setCursor(100, 17);
+    display.setTextColor(BLACK);
+    display.print(buzzer_on_off(buzzer_error_sound));}
+    else{
+    display.drawRoundRect(90, 15, 38, 12, 3, 1);
+    display.setCursor(100, 17);
+    display.setTextColor(WHITE);
+    display.print(buzzer_on_off(buzzer_error_sound));
+    }
+
+
+
+
+    display.setTextColor(WHITE);
+    display.setCursor(0, 32);
+    display.print("pause/resume  :");
+
+
+    if(buzzer_settings_cursor == 2){
+    display.fillRoundRect(90, 30, 38, 12, 3, 1);
+    display.setCursor(100, 32);
+    display.setTextColor(BLACK);
+    display.print(buzzer_on_off(buzzer_pause_sound));
+    }
+    else{
+    display.drawRoundRect(90, 30, 38, 12, 3, 1);
+    display.setCursor(100, 32);
+    display.setTextColor(WHITE);
+    display.print(buzzer_on_off(buzzer_pause_sound));
+    }
+    
+
+
+
+
+
+    display.setTextColor(WHITE);
+    display.setCursor(0, 47);
+    display.print("press sound   :");
+
+
+
+if(buzzer_settings_cursor == 3){
+    display.fillRoundRect(90, 45, 38, 12, 3, 1);
+    display.setCursor(100, 47);
+    display.setTextColor(BLACK);
+    display.print(buzzer_on_off(buzzer_press_sound));
+}
+else{
+    display.drawRoundRect(90, 45, 38, 12, 3, 1);
+    display.setCursor(100, 47);
+    display.setTextColor(WHITE);
+    display.print(buzzer_on_off(buzzer_press_sound));
+}
+    
+if(left == "pressed" || right == "pressed"){
+    if(buzzer_settings_cursor == 0){
+       if(buzzer_always_on == true){
+        buzzer_always_on = false;
+        saves.putBool("b_always_on",false);
+        }
+        else if(buzzer_always_on == false){
+          buzzer_always_on = true;
+          saves.putBool("b_always_on",true);
+        }
+    }
+    else if(buzzer_settings_cursor == 1){
+       // buzzer_change_state(buzzer_error_sound,"b_error_sound");
+       if(buzzer_error_sound == false){
+        buzzer_error_sound = true;
+       }
+       else if(buzzer_error_sound == true){
+        buzzer_error_sound = false;
+       }
+         saves.putBool("b_error_sound",buzzer_error_sound);
+    }
+    else if(buzzer_settings_cursor == 2){
+       // buzzer_change_state(buzzer_pause_sound,"b_pause_sound");
+        if(buzzer_pause_sound == false){
+        buzzer_pause_sound = true;
+       }
+       else if(buzzer_pause_sound == true){
+        buzzer_pause_sound = false;
+       }
+         saves.putBool("b_pause_sound",buzzer_pause_sound);
+    }   
+    else if(buzzer_settings_cursor == 3){
+      if(buzzer_press_sound == false){
+        buzzer_press_sound = true;
+       }
+       else if(buzzer_press_sound == true){
+        buzzer_press_sound = false;
+       }
+       // buzzer_change_state(buzzer_press_sound,"b_press_sound");
+        saves.putBool("b_press_sound",buzzer_press_sound);
+    }       
+
+
+
+}    
+
+    display.display();
+}
 
 
 
@@ -1463,7 +1647,7 @@ if(options_select_mode == 5){
 }
 
 
-if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8 && options_select_mode!= 2 && options_select_mode!= 14 && options_select_mode != 5){
+if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8 && options_select_mode!= 2 && options_select_mode!= 14 && options_select_mode != 5 && options_select_mode != 15){
     last_select_mode = select_mode;
     select_mode = 5;
     error_message_text = "not done yet";
@@ -1535,6 +1719,10 @@ void setup() {
    //settings values init
    saves_screen_off_time = saves.getUInt("screen_off_time", 30000); // in micro-seconds
    rtc.offset = gmt_offset = saves.getLong("gmt_offset", 3600); // in seconds
+   buzzer_always_on = saves.getBool("b_always_on",true);
+   buzzer_error_sound = saves.getBool("b_error_sound",false);
+   buzzer_pause_sound = saves.getBool("b_pause_sound",true);
+   buzzer_press_sound = saves.getBool("b_press_sound",true);
    
 }
 
