@@ -16,7 +16,8 @@ This project took me a lot of time and work , I hope you like this IOT project.
 <li>used internal RTC to have accurate activity timer</li>
 <li>it has internal temp sensor</li>
 <li>it has DHT11 sensor which senses TEMP and humidity (+- 2 C  ,  +- 5%)</li><br>
-#hardware :
+
+# hardware :
 Esp32 (4mb ROM , 256 kb Ram , wifi , bluetooth) , OLED sceen (0.96" 128*64) , ir reciever diode , RGB led , navigation buttons , DHT11 sensor
 <br>
 #Osama Breman 2023 
