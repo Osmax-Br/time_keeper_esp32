@@ -54,8 +54,8 @@ int filled_rect = -1 ; //for inverting text
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
 const int pages = 4; // ui pages number
 int current_page = 0; // for navigation
-String str[pages][12] = {{"school","mosque","sleep","music","eat","anime","bath","out","face","youtube","quran","study"},
-{"arabic","french","math","physics","chimstry","science","draw","code forces","python","esp32","book","minecraft"},
+String str[pages][12] = {{"Biology","Chemistry","Physics","History","English","Mosque","Minecraft","Family","Sleep","Quran","Tidy","Plants"},
+{"arabic","french","math","physics","clock","science","draw","code forces","python","esp32","book","Gaming"},
 {"tidy","fix","souq","/","/","/","famly Mother","famly Father","edit","cook","/","/"},
 {"/","/","/","/","/","/","/","/","/","/","/","/"}};
 int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},{42,17,43,18},{84,17,43,18}},{{0,33,43,17},{42,33,43,17},{84,33,43,17}},{{0,49,43,15},{42,49,43,15},{84,49,43,15}}};  //the data of each rectangular in the grid eg: width,height,x,y
@@ -80,9 +80,14 @@ int last_rtc_update = 0;    // for not consuming the cpu for updating rtc
 //network credentials
 const char *ssid     = "lemone"; 
 const char *password = "Hta87#Mi00";
+//const char* ssid = "Najjar";
+//const char* password = "tecoof1937";
 String ssid_ ,password_ ;
+const char* ssid_ap = "esp32";
+const char* password_ap = "123456789";
 bool ssid_set = true;
 bool wifi_set_mode,password_set = false;
+int wifi_page = 0;
 // for setting specific ip address
 IPAddress local_IP(192, 168, 1, 199); //192.168.1.199
 IPAddress gateway(192, 168, 1, 1);
@@ -175,7 +180,7 @@ TaskHandle_t buzzer_tone;
 //************************************************************
 // sql vars
 //String sql_server_string = "http://192.168.1.11/esp32sql/data_base_script.php"; 
-const char* sql_server = "http://192.168.1.11/esp32sql/data_base_script.php"; 
+const char* sql_server = "http://192.168.1.9/esp32sql/data_base_script.php"; 
 
 
 
@@ -506,7 +511,9 @@ void web_server(){
 
 
     }}
+
     request->send(200, "text/html", " <meta http-equiv='refresh' content='0; URL=http://192.168.1.199/'> ");
+
   });
  
   server.begin();
@@ -538,7 +545,7 @@ void error_message(String error_text_message,int last_select_mode){
   display.setTextColor(WHITE);
   display.setCursor(0,0);
   display.print(error_text_message);
-  display.drawRect(40,45,50,15,WHITE); 
+  display.drawRoundRect(40,45,50,15,3,WHITE); 
   display.setCursor(60,48);
   display.print("ok");
   display.display();
@@ -702,6 +709,7 @@ if(paused == false && chosen_value != "Nothing"){
 
 
 void connect_wifi(){
+  //WiFi.mode(WIFI_AP);
   if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {  // ensuring no error happened
   }
   display.print("connecting.......");
@@ -709,7 +717,7 @@ void connect_wifi(){
   connection_begin = millis();  //for timing out
      if(WiFi.status() != WL_CONNECTED){
       while(WiFi.status() != WL_CONNECTED && millis() <= connection_begin+20000){
-        WiFi.begin(ssid, password);
+        WiFi.begin(ssid,password);
         break;    
       } 
      
@@ -1664,6 +1672,12 @@ if(options_select_mode == 15){
 
 if(options_select_mode == 5){
     wifi_set_mode = true;
+    time_critical = true;
+    //WiFi.begin("esp32", "123456789");
+    if(WiFi.status() == WL_CONNECTED){
+      Serial.print("connecteed");
+    }
+    if(wifi_page == 0){
     display.clearDisplay();
     display.setTextColor(WHITE);
     display.setTextSize(1);
@@ -1671,29 +1685,79 @@ if(options_select_mode == 5){
     display.setCursor(0, 0);
     display.print("Set wifi credentials");
     display.setCursor(0, 10);
-    display.print("connect via phone to:");
+    display.print("host wifi on phone");
     display.setCursor(0, 25);
     display.print("SSID : esp32");
     display.setCursor(0, 38);
     display.print("Pass : 123456789");
+
+    
+    
+    
+    }
+    else if(wifi_page == 1){
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.setCursor(0, 0);
+    display.println("connect via browser :");
+    display.setCursor(0, 15);
+    display.print("IP : ");
+    display.print(WiFi.localIP());
+    display.setCursor(0, 27);
+    display.print("Then type ssid and \npress submit ONLY");
+    
+    }
+    else if(wifi_page == 2){
+    display.clearDisplay();
+    display.setTextColor(WHITE);
+    display.setTextSize(2);
+    display.setFont(NULL);
+    display.setCursor(0, 0);
+    display.println("wifi saved");
+    display.setCursor(0, 15);
+    display.setTextSize(1);
+    display.println("now you can connect\nto the network and \nconnect to \n   ip:129.168.1.199");
+   
+    }
+    
+    if(selecT == "pressed" && wifi_page == 2){
+      display.clearDisplay();
+    ssid_set = true;
+    password_set = false;
+    wifi_set_mode = false;
+    Serial.printf("%s , %s \n",ssid_,password_);
+    WiFi.disconnect();
+    connect_wifi();
+    options_select_mode = 0;
+    select_mode = 0;
+    } 
+        
+ if(wifi_page!=2){      
         if(ok_cancel_button == false){
-    display.fillRoundRect(20, 45, 40, 15, 3, WHITE);
-    display.setCursor(23, 48);
+    display.fillRoundRect(20, 48, 40, 15, 3, WHITE);
+    display.setCursor(26, 51);
     display.setTextColor(BLACK);
     display.print("Back");
     display.setTextColor(WHITE);
-    display.drawRoundRect(70, 45, 40, 15, 3, 1);
-    display.setCursor(84, 48);
+    display.drawRoundRect(70, 48, 40, 15, 3, 1);
+    display.setCursor(79, 51);
     display.print("Next");}
     else if(ok_cancel_button == true){
-    display.drawRoundRect(20, 45, 40, 15, 3, 1);
-    display.setCursor(23, 48);
+    display.drawRoundRect(20, 48, 40, 15, 3, 1);
+    display.setCursor(26, 51);
     display.setTextColor(WHITE);
     display.print("Back");
-    display.fillRoundRect(70, 45, 40, 15, 3,WHITE);
-    display.setCursor(84, 48);
+    display.fillRoundRect(70, 48, 40, 15, 3,WHITE);
+    display.setCursor(79, 51);
     display.setTextColor(BLACK);
     display.print("Next");
+    }}
+    else if(wifi_page == 2){
+      display.drawRoundRect(40,50,50,13,1,WHITE); 
+      display.setCursor(60,52);
+      display.print("ok");
     }
 
 
@@ -1705,19 +1769,42 @@ if(options_select_mode == 5){
     if(right == "pressed" && ok_cancel_button == false){
       ok_cancel_button = true;
     }
-    display.display();
-  if(up == "long_pressed" || (password_set == true)){
+
+if(selecT == "pressed" && millis() > last_press_time + 100){
+  if(ok_cancel_button == true && wifi_page != 1){
+      wifi_page ++;
+  }
+  else if (ok_cancel_button == false && wifi_page != 0){
+    wifi_page --;
+  }
+  last_press_time = millis();
+}
+    
+if(password_set == true){
+  wifi_page = 2;
+}    
+
+  if(up == "long_pressed" ){
     ssid_set = true;
     password_set = false;
     wifi_set_mode = false;
     Serial.printf("%s , %s \n",ssid_,password_);
+    WiFi.disconnect();
+    connect_wifi();
     options_select_mode = 0;
+    select_mode = 0;
   }
-  
+
+
+
+
+
+
+  display.display(); 
 }
 
 
-if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8 && options_select_mode!= 2 && options_select_mode!= 14 && options_select_mode != 5 && options_select_mode != 15){
+if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8 && options_select_mode!= 2 && options_select_mode!= 14  && options_select_mode != 15){
     last_select_mode = select_mode;
     select_mode = 5;
     error_message_text = "not done yet";
@@ -1752,6 +1839,8 @@ void setup() {
   sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);  // for initilizing the counter string
 
   Serial.begin(115200);
+  Serial.println(password);
+  //Serial.println(password.c_str());
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
   display.setTextSize(1);
