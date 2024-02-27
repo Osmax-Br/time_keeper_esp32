@@ -191,7 +191,7 @@ const char* sql_server = "http://192.168.1.9/esp32sql/data_base_script.php";
 //drop screen vars
 
 //the name of options
-String options_list[4][4] = {{"End day&upload","change Time zone","server off-on","chose temp unit"},{"ssid & password","IR settings","server's ip","screen turn off"},{"alarm","email","reset activity","test rgb"},{"Reset All","internal temp","buzzer settings","Contanct me"}};
+String options_list[4][4] = {{"End day&upload","change Time zone","Edit timer","chose temp unit"},{"ssid & password","IR settings","server's ip","screen turn off"},{"alarm","email","reset activity","test rgb"},{"Reset All","internal temp","buzzer settings","Contanct me"}};
 int scroll_bar_place = 1; // for moving the cursor
 int options_outer_counter = 0;  // counting the pages
 int block_cursor = 0; // conuting the inner values inside page
@@ -866,7 +866,7 @@ if(last_action_register < 1000 && last_action_time[0] == 1 && last_action_time[1
   last_action_time[0] = 0; //fixing a problem where on startup shows 1:00
 }
   if(last_action_is_pause==true && paused == true){
-    if(last_action_register + 5000 < millis() || last_action_register < 1000){
+    if(last_action_register + 120000 < millis() || last_action_register < 1000){ //doesnt register actions less that 2 min apart 
     before_last_action_time[0] = last_action_time[0]; //dual memory saving
     before_last_action_time[1] = last_action_time[1];
     last_action_register = millis();
@@ -878,7 +878,7 @@ if(last_action_register < 1000 && last_action_time[0] == 1 && last_action_time[1
     
   }
   else if(last_action_is_pause == false && paused == false){
-    if(last_action_register + 5000 < millis() || last_action_register < 1000){
+    if(last_action_register + 120000 < millis() || last_action_register < 1000){
     before_last_action_time[0] = last_action_time[0];
     before_last_action_time[1] = last_action_time[1];
     last_action_register = millis();
@@ -1529,7 +1529,73 @@ void activity_reset_settings(){
 }
 
 //***************************************************************************
+void edit_timer(){
+  if(paused == false){
+    paused = true;
+    buzzer_tone_select = "pause";
+    }
+    display.clearDisplay();
+    display.setCursor(64 - chosen_value.length()*3,0);
+    display.setTextColor(WHITE);
+    display.setTextSize(1);
+    display.setFont(NULL);
+    display.print(chosen_value);
+    display.setCursor(20, 15);
+    display.setTextSize(3);
+    display.printf("%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1]);
+    if(up == "pressed"){ // [1] --> minutes || [2] --> hours
+        if(ok_cancel_button == false && data_storage[current_page][data_storage_index][2] < 24){  //change hours
+            data_storage[current_page][data_storage_index][2] ++ ;
+        }
+        if(ok_cancel_button == true && data_storage[current_page][data_storage_index][1] <= 59){  //change minutes
+            data_storage[current_page][data_storage_index][1] ++ ;
+        }
+        if(data_storage[current_page][data_storage_index][1] == 60){
+          data_storage[current_page][data_storage_index][1] = 0;
+          if(data_storage[current_page][data_storage_index][2] < 24){
+          data_storage[current_page][data_storage_index][2] ++ ;}
+        }
+    }
 
+    if(down == "pressed"){
+        if(ok_cancel_button == false && data_storage[current_page][data_storage_index][2] > 0){  //change minutes
+            data_storage[current_page][data_storage_index][2] -- ;
+        }
+        if(ok_cancel_button == true && data_storage[current_page][data_storage_index][1] > 0){  //change minutes
+            data_storage[current_page][data_storage_index][1] -- ;
+        }
+
+    }    
+
+    if(ok_cancel_button == false){
+    display.drawLine(25, 40, 50, 40, 1);
+    }
+    else{
+    display.drawLine(75, 40, 100, 40, 1);
+    }
+    display.setTextSize(1);
+    display.drawRoundRect(42, 48, 40, 15, 5, 1);
+    display.setCursor(57, 51);
+    display.print("ok");
+    display.display();
+    
+    
+    
+    if(left == "pressed" && ok_cancel_button == true){
+      ok_cancel_button = false;
+    }
+    if(right == "pressed" && ok_cancel_button == false){
+      ok_cancel_button = true;
+    }
+
+    if(selecT == "pressed" && millis() > last_press_time + 100){
+        last_press_time = millis();
+        options_select_mode = 0;
+    }  
+}
+
+
+//***************************************************************************
 void esp32_internal_temp_settings(){
     display.clearDisplay();
     display.setTextColor(WHITE);
@@ -1713,6 +1779,19 @@ if(options_select_mode == 12){
  rgb_settings();
 }
 
+if(options_select_mode == 3){
+  if(chosen_value == "Nothing"){
+          last_select_mode = select_mode;
+          select_mode = 5;
+          error_message_text = "choose an activity";
+          buzzer_tone_select = "error";
+          options_select_mode = 0;
+          last_press_time = millis();
+  }
+  else{
+ edit_timer();
+ }
+}
 
 if(options_select_mode == 11){
   activity_reset_settings();
@@ -1739,13 +1818,13 @@ if(options_select_mode == 15){
 }
 
 
-
+/*
 if(options_select_mode == 5){
     wifi_set_mode = true;
     time_critical = true;
     //WiFi.begin("esp32", "123456789");
     if(WiFi.status() == WL_CONNECTED){
-      Serial.print("connecteed");
+      
     }
     if(wifi_page == 0){
     display.clearDisplay();
@@ -1871,10 +1950,10 @@ if(password_set == true){
 
 
   display.display(); 
-}
+}*/
 
 
-if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8 && options_select_mode!= 2 && options_select_mode!= 14  && options_select_mode != 15){
+if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode != 11 && options_select_mode != 8 && options_select_mode!= 2 && options_select_mode!= 14  && options_select_mode != 15 && options_select_mode != 3){
     last_select_mode = select_mode;
     select_mode = 5;
     error_message_text = "not done yet";
@@ -1958,7 +2037,6 @@ void setup() {
 
 void loop() {
 update_last_action();
-Serial.printf("%i:%i || %i:%i  || last_res %i || millis %i ||last Action is p %d \n",last_action_time[0],last_action_time[1],before_last_action_time[0],before_last_action_time[1],last_action_register,millis(),last_action_is_pause);
 counter_formatting();
 // adding the value of each button to a seperate var
 up = button_up.press();
