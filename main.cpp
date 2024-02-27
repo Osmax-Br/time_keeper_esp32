@@ -819,14 +819,14 @@ void main_screen(){
  // rgb_display(7);
  display.clearDisplay();
  display.setTextColor(WHITE);
-  display.setCursor(45,53);
   display.setTextSize(1);
  //display.print("choice: ");
   if(chosen_value=="Nothing"){
+    display.setCursor(45,53);
     display.print("Nothing");
     }
   else{
-
+    display.setCursor(64 - chosen_value.length()*3,53);
     display.print(chosen_value);
     } 
   display.setFont(NULL);  
