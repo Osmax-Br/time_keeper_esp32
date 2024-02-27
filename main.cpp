@@ -54,7 +54,7 @@ int filled_rect = -1 ; //for inverting text
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
 const int pages = 4; // ui pages number
 int current_page = 0; // for navigation
-String str[pages][12] = {{"Biology","Chemistry","Physics","History","English","Mosque","Minecraft","Family","Sleep","Quran","Tidy","Plants"},
+String str[pages][12] = {{"Physiology","Anatomy","Genetics","Statistics","English 2","Mosque","Minecraft","Family","Sleep","Quran","Tidy","Plants"},
 {"arabic","french","math","physics","clock","science","draw","code forces","python","esp32","book","Gaming"},
 {"tidy","fix","souq","/","/","/","famly Mother","famly Father","edit","cook","/","/"},
 {"/","/","/","/","/","/","/","/","/","/","/","/"}};
@@ -119,13 +119,16 @@ volatile int minutes_passed,hours_passed = 0; //storing the counter values
 char time_counter_string[100] ;  // storing the formatted counter time
 volatile bool paused = true ; // for pausing timer
 
-
-
+//****************************************************************
+//last action vars
+int before_last_action_time[2],last_action_time[2] = {0,0}; //views last pause/start time
+// 0 = hours , 1 = minutes
+bool last_action_is_pause = true;
+int last_action_register = 0;
 //**************************************************************
 //storage vars
 int data_storage[4][12][3] ;
 int data_storage_index = 0;
-
 
 //****************************************************************
 // web server vars
@@ -527,7 +530,6 @@ String partition_time(long time){
   long seconds = time - (hours*3600 + minutes*60) ;
   char return_value[200];
   sprintf(return_value,"%02i:%02i:%02i",hours,minutes,seconds);
-  Serial.println(time);
   return return_value;
 }
 
@@ -600,7 +602,7 @@ if(millis() > last_time_long_press_mode + 10000 && ir_long_press == true){
     last_time_long_press_mode = millis();
     ir_long_press = false;
 }
-//Serial.print(temp_button_return);
+
 
 
 if(IrReceiver.decodedIRData.decodedRawData == 4060954688){ 
@@ -665,12 +667,6 @@ if(IrReceiver.decodedIRData.decodedRawData == 3877126208){
 
   if (IrReceiver.decode()) {
 
-      //Serial.println(IrReceiver.decodedIRData.decodedRawData);
-      // USE NEW 3.x FUNCTIONS
-       //IrReceiver.printIRResultShort(&Serial); // Print complete received data in one line
-      // IrReceiver.checkForRepeatSpaceTicksAndSetFlag(10);
-       //IrReceiver.checkForRecordGapsMicros(&Serial);
-     // IrReceiver.printIRSendUsage(&Serial);   // Print the statement required to send this data
       IrReceiver.resume(); // Enable receiving of the next value
   } 
 
@@ -861,6 +857,36 @@ void main_screen(){
 }
 
 
+void update_last_action(){ 
+/* views when was the last time when pause/start pressed , have a dual action memory , doesnt register an action if the seperation
+time is less than a minute
+*/
+// pause --> resume
+  if(last_action_is_pause==true && paused == true){
+    if(last_action_register + 5000 < millis() || last_action_register < 1000){
+    before_last_action_time[0] = last_action_time[0]; //dual memory saving
+    before_last_action_time[1] = last_action_time[1];
+    last_action_register = millis();
+    }
+    last_action_time[0] = rtc.getTime("%I").toInt();  //updating
+    last_action_time[1] = rtc.getTime("%M").toInt();
+
+    last_action_is_pause = false; 
+    
+  }
+  else if(last_action_is_pause == false && paused == false){
+    if(last_action_register + 5000 < millis() || last_action_register < 1000){
+    before_last_action_time[0] = last_action_time[0];
+    before_last_action_time[1] = last_action_time[1];
+    last_action_register = millis();
+    }
+    last_action_time[0] = rtc.getTime("%I").toInt();
+    last_action_time[1] = rtc.getTime("%M").toInt();
+    last_action_is_pause = true;
+    
+  }
+}
+
 void screen_off(){
 
  if((right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed")){  // wake the screen up
@@ -950,13 +976,10 @@ void buzzer_change_state(bool state,const char* key){
     //saves.putBool(key,false);
     
     state = false;
-    Serial.print(state);
   }
   else if(state == false){
-  //  Serial.println("switch");
   //saves.putBool(key,true);
     state = true;
-    Serial.print(state);
   }
 }
 
@@ -1028,7 +1051,6 @@ if(time_partitioned == false){
         gmt_offset = gmt_offset_hours*3600 + gmt_offset_minutes*60 ;
         rtc.offset = gmt_offset ;
         saves.putLong("gmt_offset",gmt_offset);
-       // Serial.println(gmt_offset);
         last_press_time = millis();
         options_select_mode = 0;
     }
@@ -1536,7 +1558,6 @@ void settings_menu_navigation(){
     option_counter_temp++ ;
     last_press_time = millis(); // for not regestring multiple presses
     options_select_mode = option_counter_temp;
-   // Serial.print(options_select_mode);
 }}
 
 
@@ -1617,7 +1638,6 @@ void screen_off_settings(){
         }
         else if(saves_screen_off_time >= 5000){
         saves.putUInt("screen_off_time",saves_screen_off_time);
-        Serial.println(saves_screen_off_time);
         last_press_time = millis();
         time_partitioned = false;
         options_select_mode = 0;}
@@ -1727,7 +1747,7 @@ if(options_select_mode == 5){
     ssid_set = true;
     password_set = false;
     wifi_set_mode = false;
-    Serial.printf("%s , %s \n",ssid_,password_);
+
     WiFi.disconnect();
     connect_wifi();
     options_select_mode = 0;
@@ -1788,7 +1808,7 @@ if(password_set == true){
     ssid_set = true;
     password_set = false;
     wifi_set_mode = false;
-    Serial.printf("%s , %s \n",ssid_,password_);
+
     WiFi.disconnect();
     connect_wifi();
     options_select_mode = 0;
@@ -1839,8 +1859,6 @@ void setup() {
   sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);  // for initilizing the counter string
 
   Serial.begin(115200);
-  Serial.println(password);
-  //Serial.println(password.c_str());
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
   display.setTextSize(1);
@@ -1889,6 +1907,8 @@ void setup() {
 
 
 void loop() {
+update_last_action();
+Serial.printf("%i:%i || %i:%i  || last_res %i || millis %i ||last Action is p %d \n",last_action_time[0],last_action_time[1],before_last_action_time[0],before_last_action_time[1],last_action_register,millis(),last_action_is_pause);
 counter_formatting();
 // adding the value of each button to a seperate var
 up = button_up.press();
@@ -1994,7 +2014,7 @@ if(select_mode == 5){
 
 
 
-//Serial.print(current_rgb);
+
 display.display();
 }
  
