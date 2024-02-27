@@ -960,8 +960,7 @@ void temp_screen(){
     heat_index = dht.computeHeatIndex(temperature, humidity, false);
     last_temp_update = millis();
 }
-
-//sprintf(temp_temp_print,"I %.01f C%c , H %.01f %%",heat_index,(char)247,humidity);
+if(temperature > -30 && temperature < 100){
     display.setCursor(0,0);
     display.setTextSize(1);
     display.print("TEMP  ");
@@ -977,12 +976,33 @@ void temp_screen(){
     display.print("INDEX ");
     display.setTextSize(2);
     display.printf("%.01f C%c",heat_index,(char)247);
-    if(heat_index >= 30){
+    }
+else{
+    display.setCursor(0,0);
+    display.setTextSize(1);
+    display.print("TEMP  ");
+    display.setTextSize(2);
+    display.print("Error");
+    display.setCursor(0,25);
+    display.setTextSize(1);
+    display.print("HUMID  ");
+    display.setTextSize(2);
+    display.print("Error");
+    display.setCursor(0,50);
+    display.setTextSize(1);
+    display.print("INDEX ");
+    display.setTextSize(2);
+    display.print("Error");
+
+
+} 
+if(ir_long_press == false){ 
+    if(heat_index >= 30 ){
         rgb_display(0);
     }
     else{
         rgb_display(1);
-    }
+    }}
     display.display();
 }
 
