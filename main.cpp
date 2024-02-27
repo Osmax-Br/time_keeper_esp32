@@ -862,6 +862,9 @@ void update_last_action(){
 time is less than a minute
 */
 // pause --> resume
+if(last_action_register < 1000 && last_action_time[0] == 1 && last_action_time[1] == 0 && millis() < 10000){
+  last_action_time[0] = 0; //fixing a problem where on startup shows 1:00
+}
   if(last_action_is_pause==true && paused == true){
     if(last_action_register + 5000 < millis() || last_action_register < 1000){
     before_last_action_time[0] = last_action_time[0]; //dual memory saving
@@ -888,7 +891,7 @@ time is less than a minute
 }
 
 void screen_off(){
-
+ 
  if((right=="pressed" || left == "pressed" || up == "pressed" || down == "pressed" || selecT == "pressed")){  // wake the screen up
   //for not interfering with the grid selection
   display.ssd1306_command(SSD1306_DISPLAYON);
@@ -920,6 +923,33 @@ if(data_storage[current_page][data_storage_index][1] == 59){
 sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);
 
 }
+
+void last_action_screen(){
+    display.clearDisplay();
+    display.setCursor(33, 8);
+    display.drawRoundRect(10, 0, 105, 35, 5, 1);
+    display.setTextSize(2);
+    display.printf("%02i:%02i",last_action_time[0],last_action_time[1]);
+    display.setTextSize(1);
+    display.setCursor(15, 25);
+    if(paused == true){
+    display.print("paused");}
+    else{
+      display.print("resume");
+    }
+    display.drawRoundRect(17, 40, 90, 24, 5, 1);
+    display.setCursor(50, 45);
+    display.printf("%02i:%02i",before_last_action_time[0],before_last_action_time[1]);
+    display.setCursor(20, 52);
+    if(last_action_is_pause == true){
+    display.print("pause");}
+    else{
+      display.print("resume");
+    }
+    display.display();
+}
+
+
 
 void temp_screen(){
   display.clearDisplay();
@@ -1946,11 +1976,24 @@ if(selecT == "long_pressed" ){ //this is for entering the grid mode or main scre
 if(select_mode == 0 && right == "long_pressed"){
     select_mode = 6;
 }
-if(select_mode == 6 && left == "long_pressed"){
-    select_mode = 0;
-
+else if(select_mode == 0 && left == "long_pressed"){
+  select_mode = 7;
 }
 
+
+
+if(select_mode == 6 && left == "long_pressed"){
+    select_mode = 0;
+    left = "";
+}
+
+if(select_mode == 7 && right == "long_pressed"){
+  select_mode = 0;
+}
+
+if(select_mode == 7){
+  last_action_screen();
+}
 
 if(select_mode == 6){
   temp_screen();
