@@ -234,6 +234,17 @@ bool buzzer_press_sound = true;
 int buzzer_settings_cursor = 0;
 
 
+//***************************************************
+//7 segment vars
+int STCP_pin = 16 ; //latch
+int SHCP_pin = 4 ; //clock
+int DS_pin = 2 ;
+int dec_digits   [11] {1,79,18,6,76,36,32,15,0,4,127};
+int seg_parts[4] = {17,5,18,19};  
+int next_seg = 0;
+int next_seg_time = 0;
+int temp_num = 0;
+TaskHandle_t segment_handler;
 
 
 
@@ -256,6 +267,104 @@ uint8_t temprature_sens_read();
 
 
 
+
+
+
+void segment_driver(int number){
+int first_digit = (number/1000)%10 ;                 //,second_digit,third_digit,fourth_digit = 0;
+int second_digit = (number / 100)%10 ;
+int third_digit = (number / 10)%10 ;
+int fourth_digit = number % 10 ;
+
+
+if(number < 1000){
+  first_digit = 10;
+  if(number < 100){
+    second_digit = 10;
+    if(number < 10){
+      third_digit = 10;
+    }
+  }
+}
+
+
+if(next_seg == 0){
+  if(next_seg_time + 3 < millis()){
+  digitalWrite(seg_parts[0],1);
+  digitalWrite(seg_parts[1],0);
+  digitalWrite(seg_parts[2],0);
+  digitalWrite(seg_parts[3],0);
+
+  digitalWrite(STCP_pin,LOW);
+  shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[first_digit]);
+  digitalWrite(STCP_pin, HIGH);
+  
+  next_seg_time = millis();
+  next_seg = 1;
+  }
+}
+
+else if(next_seg == 1){
+if(next_seg_time + 3 < millis()){
+  digitalWrite(seg_parts[0],0);
+  digitalWrite(seg_parts[1],1);
+  digitalWrite(seg_parts[2],0);
+  digitalWrite(seg_parts[3],0);
+
+  digitalWrite(STCP_pin,LOW);
+  shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[second_digit]);
+  digitalWrite(STCP_pin, HIGH);
+
+  next_seg_time = millis();
+  next_seg = 2;
+  }
+}
+
+ 
+
+else if(next_seg == 2){
+  if(next_seg_time + 3 < millis()){
+  digitalWrite(seg_parts[0],0);
+  digitalWrite(seg_parts[1],0);
+  digitalWrite(seg_parts[2],1);
+  digitalWrite(seg_parts[3],0);
+
+  digitalWrite(STCP_pin,LOW);
+  shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[third_digit]);
+  digitalWrite(STCP_pin, HIGH);
+    
+  next_seg_time = millis();
+  next_seg = 3;
+  }
+}
+
+
+
+
+
+else if(next_seg == 3){
+  if(next_seg_time + 3 < millis()){
+  digitalWrite(seg_parts[0],0);
+  digitalWrite(seg_parts[1],0);
+  digitalWrite(seg_parts[2],0);
+  digitalWrite(seg_parts[3],1);
+
+  digitalWrite(STCP_pin,LOW);
+  shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[fourth_digit]);
+  digitalWrite(STCP_pin, HIGH);
+  next_seg_time = millis();
+  next_seg = 0;
+  }
+}
+
+}
+
+void segment_driver_display(void * parameter){
+  for(;;){
+segment_driver(1234);
+vTaskDelay(5);
+}
+}
 
 // should put it once
 void rgb_display(int rgb_value_index){  // we did 255 - valie because the led is common annode ==> 0 = on  , 1 = off
@@ -1984,7 +2093,8 @@ if(options_select_mode >= 2 && options_select_mode != 12 && options_select_mode 
 
 
 void setup() {
-  
+    setCpuFrequencyMhz(240);
+
   sprintf(time_counter_string,"%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);  // for initilizing the counter string
 
   Serial.begin(115200);
@@ -1993,11 +2103,17 @@ void setup() {
   display.setTextSize(1);
   display.setTextColor(WHITE,BLACK);
   display.setCursor(0,0);
-  pinMode(4,OUTPUT);
   pinMode(PIN_RED,   OUTPUT);
   pinMode(PIN_GREEN, OUTPUT);
   pinMode(PIN_BLUE,  OUTPUT);
   pinMode(buzzerpin,OUTPUT);
+  pinMode(SHCP_pin,OUTPUT);
+  pinMode(STCP_pin,OUTPUT);
+  pinMode(DS_pin,OUTPUT);
+  pinMode(seg_parts[0],OUTPUT);
+  pinMode(seg_parts[1],OUTPUT);
+  pinMode(seg_parts[2],OUTPUT);
+  pinMode(seg_parts[3],OUTPUT);
 
   timer = timerBegin(0, 80, true);           	// timer 0, prescalar: 80, UP counting
   timerAttachInterrupt(timer, &onTimer, true); 	// Attach interrupt
@@ -2009,8 +2125,8 @@ void setup() {
     connect_wifi();
     display.clearDisplay();
 
- 
-   xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
+  xTaskCreatePinnedToCore(segment_driver_display,"segment_driver_display",10000,NULL,1,&segment_handler,0); // create a seperate task for getting the ntp time
+  xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
   xTaskCreatePinnedToCore(buzzer_tone_function,"buzzer_tone",10000,NULL,0,&buzzer_tone,1); // create a seperate task for buzzer tones
    if(WiFi.status() == WL_CONNECTED && server_started == false){
    web_server();
@@ -2152,6 +2268,8 @@ if(select_mode == 5){
   display.clearDisplay();
   error_message(error_message_text,last_select_mode);
 } 
+
+
 
 
 
