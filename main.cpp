@@ -9,24 +9,38 @@
 //#include <WiFiUdp.h>
 //#include <NTPClient.h>
 //#include <SPI.h>
-//#include <Wire.h>
+#include <Wire.h>
 //#include <WiFiUdp.h>
 #include "html.h" // the website code
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ESP32Time.h> // for using the internal rtc
 #include <IRremote.hpp>
-#include "DHT.h"
+//#include "DHT.h"
 #include <Preferences.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
 //******************************
 // dht int
 #define DHTPIN 13 // dht11 pin
 #define DHTTYPE DHT11
-DHT dht(DHTPIN, DHTTYPE);
-int last_temp_update = 0; // dht11 updates between 2 seconds intreval
-float temperature,humidity,heat_index = 0;  // storing heat informations
-/*
+//DHT dht(DHTPIN, DHTTYPE);
+//int last_temp_update = 0; // dht11 updates between 2 seconds intreval
+//float temperature,humidity,heat_index = 0;  // storing heat informations
 
+
+
+//bme280 
+#define SEALEVELPRESSURE_HPA (1013.25)
+Adafruit_BME280 bme;
+int last_temp_update = 0; // bme280 updates between 2 seconds intreval
+float temperature,humidity,pressure,heat_index = 0;  // storing heat informations
+
+
+
+
+
+/*
 INSERT INTO activities (chosen_activity,hours_passed,minutes_passed,seconds_passed,activity_date_month,activity_date_day_number,activity_date_weekday,activity_date_hour,activity_date_minute)
       VALUES ('Paul', 32, 32, 32 , 1 ,1 , "wed" ,1 ,1 );
 */
@@ -54,7 +68,7 @@ int filled_rect = -1 ; //for inverting text
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
 const int pages = 4; // ui pages number
 int current_page = 0; // for navigation
-String str[pages][12] = {{"Physiology","Anatomy","Genetics","Statistics","English 2","Mosque","Minecraft","Family","Sleep","Quran","Tidy","Plants"},
+String str[pages][12] = {{"Anatomy 1","Histology","Bio Chemistry","Arduino","Esp32","Mosque","Code Forces","National culture","psychology","Quran","English","Arabic"},
 {"arabic","french","math","physics","clock","science","draw","code forces","python","esp32","book","Gaming"},
 {"tidy","fix","souq","/","/","/","famly Mother","famly Father","edit","cook","/","/"},
 {"/","/","/","/","/","/","/","/","/","/","/","/"}};
@@ -207,9 +221,9 @@ String current_get_day_and_month ;  // temp for storing date (not being used)
 
 //******************************************************
 //rgb led vars
-#define PIN_RED    15 // GPIO23
+#define PIN_RED    12 // GPIO23
 #define PIN_GREEN  25 // GPIO22
-#define PIN_BLUE   12 // GPIO21
+#define PIN_BLUE   15 // GPIO21
 //                       red 0      green 1   blue2     yellow 3    cyan 4      maginta 5   pink 6     off 7
 int rgb_values[15][3] = {{255,0,0},{0,255,0},{0,0,255},{250,100,3},{7,245,201},{180,7,245},{245,7,75},{0,0,0}};
 String rgb_values_name[15] = {"Red","Green","Blue","Yellow","Cyan","Maginta","Pink","Off"}; //this is for test rgb option
@@ -271,6 +285,8 @@ uint8_t temprature_sens_read();
 
 
 void segment_driver(int number){
+ 
+  /*
 int first_digit = (number/1000)%10 ;                 //,second_digit,third_digit,fourth_digit = 0;
 int second_digit = (number / 100)%10 ;
 int third_digit = (number / 10)%10 ;
@@ -287,81 +303,95 @@ if(number < 1000){
   }
 }
 
-
-if(next_seg == 0){
-  if(next_seg_time + 3 < millis()){
-  digitalWrite(seg_parts[0],1);
-  digitalWrite(seg_parts[1],0);
-  digitalWrite(seg_parts[2],0);
-  digitalWrite(seg_parts[3],0);
-
+//17 5 18 19
+  //digitalWrite(seg_parts[0],1);
+  //digitalWrite(seg_parts[1],0);
+  //digitalWrite(seg_parts[2],0);
+  //digitalWrite(seg_parts[3],0);
+REG_WRITE (GPIO_OUT_W1TS_REG, BIT17);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT5);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT18);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT19);
+//REG_WRITE (GPIO_OUT_W1TC_REG, BIT16);
   digitalWrite(STCP_pin,LOW);
-  shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[first_digit]);
-  digitalWrite(STCP_pin, HIGH);
   
-  next_seg_time = millis();
-  next_seg = 1;
-  }
-}
-
-else if(next_seg == 1){
-if(next_seg_time + 3 < millis()){
-  digitalWrite(seg_parts[0],0);
-  digitalWrite(seg_parts[1],1);
-  digitalWrite(seg_parts[2],0);
-  digitalWrite(seg_parts[3],0);
-
-  digitalWrite(STCP_pin,LOW);
-  shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[second_digit]);
+  shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[first_digit]);
+ 
   digitalWrite(STCP_pin, HIGH);
+//REG_WRITE (GPIO_OUT_W1TS_REG, BIT16);  
+  
+  vTaskDelay(5);
 
-  next_seg_time = millis();
-  next_seg = 2;
-  }
-}
+  //digitalWrite(seg_parts[0],0);
+  //digitalWrite(seg_parts[1],1);
+  //digitalWrite(seg_parts[2],0);
+  //digitalWrite(seg_parts[3],0);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT17);
+REG_WRITE (GPIO_OUT_W1TS_REG, BIT5);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT18);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT19);
+//REG_WRITE (GPIO_OUT_W1TC_REG, BIT16);
+  digitalWrite(STCP_pin,LOW);
+  
+  shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[second_digit]);
+ 
+  digitalWrite(STCP_pin, HIGH);
+//REG_WRITE (GPIO_OUT_W1TS_REG, BIT16);  
+  vTaskDelay(5);
 
  
 
-else if(next_seg == 2){
-  if(next_seg_time + 3 < millis()){
-  digitalWrite(seg_parts[0],0);
-  digitalWrite(seg_parts[1],0);
-  digitalWrite(seg_parts[2],1);
-  digitalWrite(seg_parts[3],0);
+  //digitalWrite(seg_parts[0],0);
+  //digitalWrite(seg_parts[1],0);
+  //digitalWrite(seg_parts[2],1);
+  //digitalWrite(seg_parts[3],0);
 
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT17);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT5);
+REG_WRITE (GPIO_OUT_W1TS_REG, BIT18);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT19);
+ 
+ //REG_WRITE (GPIO_OUT_W1TC_REG, BIT16);
   digitalWrite(STCP_pin,LOW);
+
   shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[third_digit]);
+ 
   digitalWrite(STCP_pin, HIGH);
-    
-  next_seg_time = millis();
-  next_seg = 3;
-  }
-}
+  //REG_WRITE (GPIO_OUT_W1TS_REG, BIT16);
+  
+  vTaskDelay(5);
 
 
 
 
 
-else if(next_seg == 3){
-  if(next_seg_time + 3 < millis()){
-  digitalWrite(seg_parts[0],0);
-  digitalWrite(seg_parts[1],0);
-  digitalWrite(seg_parts[2],0);
-  digitalWrite(seg_parts[3],1);
 
+  //digitalWrite(seg_parts[0],0);
+ // digitalWrite(seg_parts[1],0);
+ // digitalWrite(seg_parts[2],0);
+  //digitalWrite(seg_parts[3],1);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT17);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT5);
+REG_WRITE (GPIO_OUT_W1TC_REG, BIT18);
+REG_WRITE (GPIO_OUT_W1TS_REG, BIT19);
+//REG_WRITE (GPIO_OUT_W1TC_REG, BIT16);
   digitalWrite(STCP_pin,LOW);
   shiftOut(DS_pin,   SHCP_pin, LSBFIRST,dec_digits[fourth_digit]);
   digitalWrite(STCP_pin, HIGH);
-  next_seg_time = millis();
-  next_seg = 0;
-  }
-}
-
+//  REG_WRITE (GPIO_OUT_W1TS_REG, BIT16);
+  
+  vTaskDelay(5);
+*/
 }
 
 void segment_driver_display(void * parameter){
   for(;;){
-segment_driver(1234);
+     vTaskDelete(nullptr);
+    if(buzzer_error_sound == true){
+int temp_nem = data_storage[current_page][data_storage_index][1]*100 + data_storage[current_page][data_storage_index][0];
+//segment_driver(temp_nem);
+
+}
 vTaskDelay(5);
 }
 }
@@ -676,7 +706,7 @@ void error_message(String error_text_message,int last_select_mode){
 
 
 void ir_button(){//32086590080
-    if(IrReceiver.decodedIRData.decodedRawData == 3208659008){ 
+    if(IrReceiver.decodedIRData.decodedRawData == 3208659008 || IrReceiver.decodedIRData.decodedRawData == 4061003520){ 
   
   if(ir_long_press == false){
   ir_long_press = true;
@@ -714,50 +744,50 @@ if(millis() > last_time_long_press_mode + 10000 && ir_long_press == true){
 
 
 
-if(IrReceiver.decodedIRData.decodedRawData == 4060954688){ 
+if(IrReceiver.decodedIRData.decodedRawData == 4060954688 || IrReceiver.decodedIRData.decodedRawData == 3927310080){ 
   selecT = temp_button_return;
   if(temp_button_return = "long_pressed"){
     ir_long_press = 0;
   }
   IrReceiver.decodedIRData.decodedRawData = 0;
 }
-if(IrReceiver.decodedIRData.decodedRawData == 4094378048){
+if(IrReceiver.decodedIRData.decodedRawData == 4094378048|| IrReceiver.decodedIRData.decodedRawData == 3208707840){
         up = temp_button_return; 
           if(temp_button_return = "long_pressed"){
             ir_long_press = 0;}
         IrReceiver.decodedIRData.decodedRawData = 0;
 }
-if(IrReceiver.decodedIRData.decodedRawData == 4044243008){
+if(IrReceiver.decodedIRData.decodedRawData == 4044243008 || IrReceiver.decodedIRData.decodedRawData == 3860463360){
         down = temp_button_return;
           if(temp_button_return = "long_pressed"){
           ir_long_press = 0;} 
         IrReceiver.decodedIRData.decodedRawData = 0;
 }
-if(IrReceiver.decodedIRData.decodedRawData == 3994107968){
+if(IrReceiver.decodedIRData.decodedRawData == 3994107968 || IrReceiver.decodedIRData.decodedRawData == 4127850240){
         right = temp_button_return; 
         if(temp_button_return = "long_pressed"){
         ir_long_press = 0;}
         IrReceiver.decodedIRData.decodedRawData = 0;
 }
-if(IrReceiver.decodedIRData.decodedRawData == 4010819648){
+if(IrReceiver.decodedIRData.decodedRawData == 4010819648 || IrReceiver.decodedIRData.decodedRawData == 4161273600){
         left = temp_button_return; 
         if(temp_button_return = "long_pressed"){
         ir_long_press = 0;
   }
         IrReceiver.decodedIRData.decodedRawData = 0;
 }
-if(IrReceiver.decodedIRData.decodedRawData == 3910549568){
+if(IrReceiver.decodedIRData.decodedRawData == 3910549568 || IrReceiver.decodedIRData.decodedRawData == 3125149440){
         paused = true;
         buzzer_tone_select = "pause";
         IrReceiver.decodedIRData.decodedRawData = 0;
 }
-if(IrReceiver.decodedIRData.decodedRawData == 3893837888){
+if(IrReceiver.decodedIRData.decodedRawData == 3893837888 || IrReceiver.decodedIRData.decodedRawData == 3091726080){
   if(chosen_value != "Nothing"){
         paused = false;
         buzzer_tone_select = "resume";}
         IrReceiver.decodedIRData.decodedRawData = 0;
 }
-if(IrReceiver.decodedIRData.decodedRawData == 3877126208){
+if(IrReceiver.decodedIRData.decodedRawData == 3877126208 || IrReceiver.decodedIRData.decodedRawData == 3108437760){
         if(paused == true){
           buzzer_tone_select = "pause";
         }
@@ -775,7 +805,7 @@ if(IrReceiver.decodedIRData.decodedRawData == 3877126208){
 
 
   if (IrReceiver.decode()) {
-
+    //Serial.println(IrReceiver.decodedIRData.decodedRawData);
       IrReceiver.resume(); // Enable receiving of the next value
   } 
 
@@ -1064,27 +1094,35 @@ void temp_screen(){
   display.clearDisplay();
 
   if(millis() > last_temp_update + 2000){
+    //dht 11 version (depricated)
+    /*
     humidity = dht.readHumidity();
     temperature = dht.readTemperature();
     heat_index = dht.computeHeatIndex(temperature, humidity, false);
+    last_temp_update = millis();*/
+
+    //bme280 version
+    humidity = bme.readHumidity();
+    temperature = bme.readTemperature();
+    pressure = bme.readPressure() / 100.0F ;
     last_temp_update = millis();
 }
 if(temperature > -30 && temperature < 100){
     display.setCursor(0,0);
     display.setTextSize(1);
-    display.print("TEMP  ");
+    display.print("Temp  ");
     display.setTextSize(2);
     display.printf("%.01f C%c",temperature,(char)247);
     display.setCursor(0,25);
     display.setTextSize(1);
-    display.print("HUMID  ");
+    display.print("Humid  ");
     display.setTextSize(2);
     display.printf("%.01f %%",humidity);
     display.setCursor(0,50);
     display.setTextSize(1);
-    display.print("INDEX ");
+    display.print("Press ");
     display.setTextSize(2);
-    display.printf("%.01f C%c",heat_index,(char)247);
+    display.printf("%.01f hPa",pressure);
     }
 else{
     display.setCursor(0,0);
@@ -1106,7 +1144,7 @@ else{
 
 } 
 if(ir_long_press == false){ 
-    if(heat_index >= 30 ){
+    if(temperature < 20 || temperature > 35){
         rgb_display(0);
     }
     else{
@@ -1531,6 +1569,7 @@ void select_and_upload_settings(){
     buzzer_tone_select = "pause";
     for(int i = 0; i<4 ; i++){  // 4 pages
       for(int j =0 ; j<12 ; j++){ // 12 activities
+           if(data_storage[i][j][2] != 0 || data_storage[i][j][1] != 0 ){ 
           post(i,j,day_of_upload,month_of_upload,year_of_upload);      // the actual post function
           display.setCursor(20,55);
          char uplaod_progress_message[20] = ""; // dont know why !
@@ -1540,6 +1579,7 @@ void select_and_upload_settings(){
           display.print(uplaod_progress_message);
           display.display();
           activity_print_counter ++ ; // increase the activity counter
+           }
       }
     }
     done_uploading = true; // finished uploading (exit screen)
@@ -2125,7 +2165,7 @@ void setup() {
     connect_wifi();
     display.clearDisplay();
 
-  xTaskCreatePinnedToCore(segment_driver_display,"segment_driver_display",10000,NULL,1,&segment_handler,0); // create a seperate task for getting the ntp time
+  xTaskCreatePinnedToCore(segment_driver_display,"segment_driver_display",100000,NULL,22,&segment_handler,0); // create a seperate task for getting the ntp time
   xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
   xTaskCreatePinnedToCore(buzzer_tone_function,"buzzer_tone",10000,NULL,0,&buzzer_tone,1); // create a seperate task for buzzer tones
    if(WiFi.status() == WL_CONNECTED && server_started == false){
@@ -2135,8 +2175,18 @@ void setup() {
 
    IrReceiver.begin(14, ENABLE_LED_FEEDBACK);
    
-   dht.begin();
-
+  // dht.begin();
+    unsigned status;
+   status = bme.begin(0x76);
+       if (!status) {
+        Serial.println("Could not find a valid BME280 sensor, check wiring, address, sensor ID!");
+        Serial.print("SensorID was: 0x"); Serial.println(bme.sensorID(),16);
+        Serial.print("        ID of 0xFF probably means a bad address, a BMP 180 or BMP 085\n");
+        Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
+        Serial.print("        ID of 0x60 represents a BME 280.\n");
+        Serial.print("        ID of 0x61 represents a BME 680.\n");
+     //   while (1) delay(10);
+    }
     saves.begin("settings", false);
    //settings values init
    saves_screen_off_time = saves.getUInt("screen_off_time", 30000); // in micro-seconds
