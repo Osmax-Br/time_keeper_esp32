@@ -1,42 +1,36 @@
 #include <Arduino.h>
 #include "ESPAsyncWebServer.h"
 #include <press.h> // for multiple buttons regestration
-//#include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiServer.h>
-//#include <WiFiUdp.h>
-//#include <NTPClient.h>
-//#include <SPI.h>
 #include <Wire.h>
-//#include <WiFiUdp.h>
 #include "html.h" // the website code
+#include "temp_html.h" // the website code
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ESP32Time.h> // for using the internal rtc
 #include <IRremote.hpp>
-//#include "DHT.h"
 #include <Preferences.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-//******************************
-// dht int
-#define DHTPIN 13 // dht11 pin
-#define DHTTYPE DHT11
-//DHT dht(DHTPIN, DHTTYPE);
-//int last_temp_update = 0; // dht11 updates between 2 seconds intreval
-//float temperature,humidity,heat_index = 0;  // storing heat informations
-
 
 
 //bme280 
 #define SEALEVELPRESSURE_HPA (1013.25)
 Adafruit_BME280 bme;
-int last_temp_update = 0; // bme280 updates between 2 seconds intreval
-float temperature,humidity,pressure,heat_index = 0;  // storing heat informations
+//int last_temp_update = 0; // bme280 updates between 2 seconds intreval
+//float temperature,humidity,pressure,heat_index = 0;  // storing heat informations
+struct TemperatureData {
+  float temperature;
+  float humidity;
+  float pressure;
+};
 
-
+TemperatureData temp_data = {-1,-1,-1};
+TimerHandle_t update_bme_30sec ;
+SemaphoreHandle_t temp_mutex;
 
 
 
@@ -149,6 +143,17 @@ int data_storage_index = 0;
 bool server_started = false ; 
 WiFiClient  clientt;
 AsyncWebServer server(80);
+
+String temp_web_var(){
+ 
+  return String(temp_data.temperature);
+
+}
+
+String humid_web_var(){ 
+ return String(temp_data.humidity);
+}
+
 String timer_web_var(){
   return time_counter_string;
 }
@@ -227,6 +232,14 @@ String current_get_day_and_month ;  // temp for storing date (not being used)
 //                       red 0      green 1   blue2     yellow 3    cyan 4      maginta 5   pink 6     off 7
 int rgb_values[15][3] = {{255,0,0},{0,255,0},{0,0,255},{250,100,3},{7,245,201},{180,7,245},{245,7,75},{0,0,0}};
 String rgb_values_name[15] = {"Red","Green","Blue","Yellow","Cyan","Maginta","Pink","Off"}; //this is for test rgb option
+
+struct color {uint8_t red;uint8_t green;uint8_t blue;};
+const color color_palette[] PROGMEM = {
+ // red 0      green 1   blue2     yellow 3    cyan 4      maginta 5   pink 6     off 7
+  {255,0,0},{0,255,0},{0,0,255},{250,100,3},{7,245,201},{180,7,245},{245,7,75},{0,0,0}
+};
+QueueHandle_t rgb_queue ;
+TaskHandle_t rgb_display_h;
 int current_rgb = 0;  // this is for test rgb option
 
 
@@ -396,13 +409,24 @@ vTaskDelay(5);
 }
 }
 
-// should put it once
-void rgb_display(int rgb_value_index){  // we did 255 - valie because the led is common annode ==> 0 = on  , 1 = off
-    analogWrite(PIN_RED,255 - rgb_values[rgb_value_index][0]);
-    analogWrite(PIN_GREEN,255 - rgb_values[rgb_value_index][1]);
-    analogWrite(PIN_BLUE,255 - rgb_values[rgb_value_index][2]);
 
+void rgb_send_queue(uint8_t index){
+  color _color;
+  memcpy_P(&_color,&color_palette[index],sizeof(color));
+  xQueueSend(rgb_queue,&_color,0);
 }
+
+// should put it once
+void rgb_display(void *argp){  // we did 255 - value because the led is common annode ==> 0 = on  , 1 = off
+color _color = {0,0,0};
+for(;;){
+if(xQueueReceive(rgb_queue,&_color,10) == pdTRUE){
+vTaskDelay(1);
+    analogWrite(PIN_RED,255 - _color.red);
+    analogWrite(PIN_GREEN,255 - _color.green);
+    analogWrite(PIN_BLUE,255 - _color.blue);
+}
+}}
 
 void buzzer_tone_function(void * pvParameters){ //buzzer tone
     for(;;) {
@@ -504,7 +528,8 @@ else{}
 
 
 
-}} 
+}
+} 
 
 
 
@@ -586,7 +611,20 @@ void web_server(){
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, var_processor);
   });
-  
+    server.on("/weather", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", temp_html, var_processor);
+    //request->send(200, "text/html", " <meta http-equiv='refresh' content='0; URL=http://192.168.1.199/weather'> ");
+  });
+  server.on("/temp", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", temp_web_var().c_str());
+  });
+    server.on("/humid", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", humid_web_var().c_str());
+  });
+
+
+
+
   server.on("/timer", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", timer_web_var().c_str());
   });
@@ -681,7 +719,7 @@ int last_buzzer_time = 0;
 void error_message(String error_text_message,int last_select_mode){
   
   if(select_mode == 5){
-  rgb_display(0);
+  rgb_send_queue(0);
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(0,0);
@@ -726,18 +764,18 @@ void ir_button(){//32086590080
 
 if(ir_long_press == false){
   temp_button_return = "pressed";
-  rgb_display(7);
+  rgb_send_queue(7);
   
 }
 else{
   temp_button_return = "long_pressed";
-  rgb_display(4);
+  rgb_send_queue(4);
   
 }
 
 
 if(millis() > last_time_long_press_mode + 10000 && ir_long_press == true){
-    rgb_display(7);
+    rgb_send_queue(7);
     last_time_long_press_mode = millis();
     ir_long_press = false;
 }
@@ -1090,39 +1128,54 @@ void last_action_screen(){
 
 
 
+void temp_update(TimerHandle_t update_bme_30sec){
+TemperatureData *temp_data = (TemperatureData*)pvTimerGetTimerID(update_bme_30sec);
+
+if(xSemaphoreTake(temp_mutex,portMAX_DELAY) == pdTRUE){
+temp_data->temperature = bme.readTemperature();
+temp_data->humidity = bme.readHumidity();
+temp_data->pressure = bme.readPressure() / 100.0F ;
+xSemaphoreGive(temp_mutex);
+}
+
+
+}
+
+
+
 void temp_screen(){
   display.clearDisplay();
 
-  if(millis() > last_temp_update + 2000){
-    //dht 11 version (depricated)
-    /*
-    humidity = dht.readHumidity();
-    temperature = dht.readTemperature();
-    heat_index = dht.computeHeatIndex(temperature, humidity, false);
-    last_temp_update = millis();*/
+struct Temp_data_disp{
+  float temperature ;
+  float humidity;
+  float pressure;
+};
+Temp_data_disp temp_data_disp = {0,0,0};
 
-    //bme280 version
-    humidity = bme.readHumidity();
-    temperature = bme.readTemperature();
-    pressure = bme.readPressure() / 100.0F ;
-    last_temp_update = millis();
-}
-if(temperature > -30 && temperature < 100){
+
+temp_data_disp.temperature = temp_data.temperature;
+temp_data_disp.humidity = temp_data.humidity;
+temp_data_disp.pressure = temp_data.pressure;
+
+
+
+if(temp_data_disp.temperature > -30 && temp_data_disp.temperature < 100){
     display.setCursor(0,0);
     display.setTextSize(1);
     display.print("Temp  ");
     display.setTextSize(2);
-    display.printf("%.01f C%c",temperature,(char)247);
+    display.printf("%.01f C%c",temp_data_disp.temperature,(char)247);
     display.setCursor(0,25);
     display.setTextSize(1);
     display.print("Humid  ");
     display.setTextSize(2);
-    display.printf("%.01f %%",humidity);
+    display.printf("%.01f %%",temp_data_disp.humidity);
     display.setCursor(0,50);
     display.setTextSize(1);
     display.print("Press ");
     display.setTextSize(2);
-    display.printf("%.01f hPa",pressure);
+    display.printf("%.01f hPa",temp_data_disp.pressure);
     }
 else{
     display.setCursor(0,0);
@@ -1144,11 +1197,11 @@ else{
 
 } 
 if(ir_long_press == false){ 
-    if(temperature < 20 || temperature > 35){
-        rgb_display(0);
+    if(temp_data_disp.temperature < 20 || temp_data_disp.temperature > 35){
+        rgb_send_queue(0);
     }
     else{
-        rgb_display(1);
+        rgb_send_queue(1);
     }}
     display.display();
 }
@@ -1416,7 +1469,7 @@ void rgb_settings(){
 if(select_mode == 4 && options_select_mode == 12 && left == "pressed" && current_rgb != 0){
    current_rgb --;
 }
-  rgb_display(current_rgb);
+  rgb_send_queue(current_rgb);
   display.setCursor(30,10);
   display.setTextColor(WHITE);
   display.setTextSize(2);
@@ -1564,7 +1617,7 @@ void select_and_upload_settings(){
      sprintf(temp_date_print,"%02i/%02i",day_of_upload,month_of_upload);
      display.print(temp_date_print);  // the chosen date of upload (from last screen)
      int activity_print_counter = 0;  // for printing the progress bar on screen
-    rgb_display(5);
+    rgb_send_queue(5);
     paused = true;
     buzzer_tone_select = "pause";
     for(int i = 0; i<4 ; i++){  // 4 pages
@@ -2165,9 +2218,16 @@ void setup() {
     connect_wifi();
     display.clearDisplay();
 
-  xTaskCreatePinnedToCore(segment_driver_display,"segment_driver_display",100000,NULL,22,&segment_handler,0); // create a seperate task for getting the ntp time
+  xTaskCreatePinnedToCore(segment_driver_display,"segment_driver_display",10000,NULL,22,&segment_handler,0); // create a seperate task for getting the ntp time
   xTaskCreatePinnedToCore(get_ntp_time,"ntp_time",10000,NULL,0,&ntp_time,1); // create a seperate task for getting the ntp time
   xTaskCreatePinnedToCore(buzzer_tone_function,"buzzer_tone",10000,NULL,0,&buzzer_tone,1); // create a seperate task for buzzer tones
+ rgb_queue = xQueueCreate(5,sizeof(color));
+ xTaskCreatePinnedToCore(rgb_display,"rgb_display",1200,NULL,1,&rgb_display_h,1); // create a seperate task for buzzer tones
+
+
+
+  
+  
    if(WiFi.status() == WL_CONNECTED && server_started == false){
    web_server();
    server_started = true ;
@@ -2185,8 +2245,13 @@ void setup() {
         Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
         Serial.print("        ID of 0x60 represents a BME 280.\n");
         Serial.print("        ID of 0x61 represents a BME 680.\n");
-     //   while (1) delay(10);
+    
     }
+    temp_mutex = xSemaphoreCreateMutex();
+    update_bme_30sec = xTimerCreate("update_bme_30sec",pdMS_TO_TICKS(30000),pdTRUE,(void*)&temp_data,temp_update);
+    xTimerStart(update_bme_30sec,portMAX_DELAY);
+    assert(update_bme_30sec);
+
     saves.begin("settings", false);
    //settings values init
    saves_screen_off_time = saves.getUInt("screen_off_time", 30000); // in micro-seconds
@@ -2213,11 +2278,11 @@ selecT = button_selecT.press(); // the name is with "T" not "t" due to interfera
 ir_button();  
 
 if(selecT == "pressed" || down == "pressed" || up == "pressed" || right == "pressed" || left == "pressed"){
-  rgb_display(6);
+  rgb_send_queue(6);
   buzzer_tone_select = "one_time_short";
 }
 if(selecT == "long_pressed" || down == "long_pressed" || up == "long_pressed" || right == "long_pressed" || left == "long_pressed"){
-  rgb_display(2);
+  rgb_send_queue(2);
   buzzer_tone_select = "one_time_long";
   //resume_tone(buzzerpin);
 }
