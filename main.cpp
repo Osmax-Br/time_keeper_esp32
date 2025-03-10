@@ -60,13 +60,13 @@ String chosen_value = "Nothing"; //the chosen value from the grid
 int select_mode = 0 ; //for maniging selection ways || 0 main screen , 1 grid selection , 2 , 3 screen off , 4 drop down menu , 5 error message
 int filled_rect = -1 ; //for inverting text
 int table[12][2] = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {1, 1}, {2, 1}, {0,2}, {1,2}, {2,2}, {0,3}, {1,3}, {2,3}}; //for storing the coordinats of each square in the grid
-const int pages = 4; // ui pages number
+const uint8_t pages = 4; // ui pages number
 int current_page = 0; // for navigation
 String str[pages][12] = {{"Anatomy 1","Histology","Bio Chemistry","Arduino","Esp32","Mosque","Code Forces","National culture","psychology","Quran","English","Arabic"},
 {"arabic","french","math","physics","clock","science","draw","code forces","python","esp32","book","Gaming"},
 {"tidy","fix","souq","/","/","/","famly Mother","famly Father","edit","cook","/","/"},
 {"/","/","/","/","/","/","/","/","/","/","/","/"}};
-int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},{42,17,43,18},{84,17,43,18}},{{0,33,43,17},{42,33,43,17},{84,33,43,17}},{{0,49,43,15},{42,49,43,15},{84,49,43,15}}};  //the data of each rectangular in the grid eg: width,height,x,y
+const int rect_cord[4][3][4] = {{{0,0,43,18},{42,0,43,18},{84,0,43,18}},{{0,17,43,18},{42,17,43,18},{84,17,43,18}},{{0,33,43,17},{42,33,43,17},{84,33,43,17}},{{0,49,43,15},{42,49,43,15},{84,49,43,15}}};  //the data of each rectangular in the grid eg: width,height,x,y
 int lastpress,press_state = 0; //for button class
 int cursor[2] = {0,0} ; //the cursor for grid the bottom-left rect is the 0,0 
 String error_message_text = "" ;
@@ -115,7 +115,6 @@ button_press button_right(33);
 button_press button_left(32);
 button_press button_selecT(27);
 String up,down,right,left,selecT = "" ; // strores button values
-int up_bounce,down_bounce,righ_bounce,left_bounce,selecT_bounce = 0;  // stores bounce press values
 int last_press_time = 0;   //ignoring multiple presses at the same time for press function
 //****************************************************************
 // internal rtc timer vars
@@ -530,6 +529,17 @@ else{}
 
 }
 } 
+
+
+
+void draw_button(int x,int y,int w,int h,int r,bool invert,int xT,int yT,String text){
+    (invert==1)?display.fillRoundRect(x, y, w, h, r, WHITE):display.drawRoundRect(x, y, w, h, r, WHITE);
+    display.setCursor(xT, yT);
+    (invert == 1)?display.setTextColor(BLACK):display.setTextColor(WHITE);
+    display.print(text);
+}
+
+
 
 
 
@@ -1316,11 +1326,6 @@ void buzzer_settings(){
     buzzer_settings_cursor ++;
   }
 
-
-
-
-
-
     display.clearDisplay();
     display.setTextColor(WHITE);
     display.setTextSize(1);
@@ -1329,83 +1334,48 @@ void buzzer_settings(){
     display.println("Buzzer always : ");
 
 
+if(buzzer_settings_cursor == 0){
+  draw_button(90,0,38,12,3,1,100,2,buzzer_on_off(buzzer_always_on));
+}
+else{
+  draw_button(90,0,38,12,3,0,100,2,buzzer_on_off(buzzer_always_on));
 
-    if(buzzer_settings_cursor == 0){
-    display.fillRoundRect(90, 0, 38, 12, 3, WHITE);
-    display.setCursor(100, 2);
-    display.setTextColor(BLACK);
-    display.print(buzzer_on_off(buzzer_always_on));}
-    else{
-    display.drawRoundRect(90, 0, 38, 12, 3, WHITE);
-    display.setCursor(100, 2);
-    display.setTextColor(WHITE);
-    display.print(buzzer_on_off(buzzer_always_on));
-    }
-
-
+}
 
     display.setTextColor(WHITE);
     display.setCursor(0, 17);
     display.print("error sound   :");
 
+if(buzzer_settings_cursor == 1){
+  draw_button(90, 15, 38, 12, 3, 1,100,17,buzzer_on_off(buzzer_error_sound));
+}
+else{
+  draw_button(90, 15, 38, 12, 3, 0,100,17,buzzer_on_off(buzzer_error_sound));
 
-
-
-    if(buzzer_settings_cursor == 1){
-    display.fillRoundRect(90, 15, 38, 12, 3, 1);
-    display.setCursor(100, 17);
-    display.setTextColor(BLACK);
-    display.print(buzzer_on_off(buzzer_error_sound));}
-    else{
-    display.drawRoundRect(90, 15, 38, 12, 3, 1);
-    display.setCursor(100, 17);
-    display.setTextColor(WHITE);
-    display.print(buzzer_on_off(buzzer_error_sound));
-    }
-
+}
 
 
 
     display.setTextColor(WHITE);
     display.setCursor(0, 32);
     display.print("pause/resume  :");
-
-
-    if(buzzer_settings_cursor == 2){
-    display.fillRoundRect(90, 30, 38, 12, 3, 1);
-    display.setCursor(100, 32);
-    display.setTextColor(BLACK);
-    display.print(buzzer_on_off(buzzer_pause_sound));
-    }
-    else{
-    display.drawRoundRect(90, 30, 38, 12, 3, 1);
-    display.setCursor(100, 32);
-    display.setTextColor(WHITE);
-    display.print(buzzer_on_off(buzzer_pause_sound));
-    }
     
+if(buzzer_settings_cursor == 2){
+  draw_button(90, 30, 38, 12, 3, 1,100,32,buzzer_on_off(buzzer_pause_sound));
+}
+else{
+  draw_button(90, 30, 38, 12, 3, 0,100,32,buzzer_on_off(buzzer_pause_sound));
 
-
-
-
-
+}
     display.setTextColor(WHITE);
     display.setCursor(0, 47);
     display.print("press sound   :");
 
-
-
 if(buzzer_settings_cursor == 3){
-    display.fillRoundRect(90, 45, 38, 12, 3, 1);
-    display.setCursor(100, 47);
-    display.setTextColor(BLACK);
-    display.print(buzzer_on_off(buzzer_press_sound));
+  draw_button(90, 45, 38, 12, 3, 1,100,47,buzzer_on_off(buzzer_press_sound));
 }
 else{
-    display.drawRoundRect(90, 45, 38, 12, 3, 1);
-    display.setCursor(100, 47);
-    display.setTextColor(WHITE);
-    display.print(buzzer_on_off(buzzer_press_sound));
+  draw_button(90, 45, 38, 12, 3, 0,100,47,buzzer_on_off(buzzer_press_sound));
 }
     
 if(left == "pressed" || right == "pressed"){
@@ -1668,28 +1638,15 @@ void activity_reset_settings(){
     display.setCursor(20, 40);
     display.printf("%02i:%02i:%02i",data_storage[current_page][data_storage_index][2],data_storage[current_page][data_storage_index][1],data_storage[current_page][data_storage_index][0]);
     display.setFont(NULL);
+
     if(ok_cancel_button == false){
-    display.fillRoundRect(20, 45, 40, 15, 3, WHITE);
-    display.setCursor(23, 48);
-    display.setTextColor(BLACK);
-    display.print("Cancel");
-    display.setTextColor(WHITE);
-    display.drawRoundRect(70, 45, 40, 15, 3, 1);
-    display.setCursor(84, 48);
-    display.print("ok");}
-    else if(ok_cancel_button == true){
-    display.drawRoundRect(20, 45, 40, 15, 3, 1);
-    display.setCursor(23, 48);
-    display.setTextColor(WHITE);
-    display.print("Cancel");
-    display.fillRoundRect(70, 45, 40, 15, 3,WHITE);
-    display.setCursor(84, 48);
-    display.setTextColor(BLACK);
-    display.print("ok");
-    }
-
-
-
+  draw_button(20, 45, 40, 15,3,1,23,48,"cancel");
+  draw_button(70, 45, 40, 15,3,0,84,48,"ok");
+}
+else{
+  draw_button(20, 45, 40, 15,3,0,23,48,"cancel");
+  draw_button(70, 45, 40, 15,3,1,84,48,"ok");
+}
 
     if(left == "pressed" && ok_cancel_button == true){
       ok_cancel_button = false;
@@ -2290,7 +2247,7 @@ if(selecT == "long_pressed" || down == "long_pressed" || up == "long_pressed" ||
 
 
 // adding the values of bounce press vars
-selecT_bounce = button_selecT.bounce_press(); 
+//selecT_bounce = button_selecT.bounce_press(); 
 
 if(selecT == "long_pressed" ){ //this is for entering the grid mode or main screen
   if(select_mode == 1){
