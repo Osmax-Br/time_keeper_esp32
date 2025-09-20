@@ -3,9 +3,13 @@
 button_press::button_press(int pin){
     pinMode(pin,INPUT_PULLUP); //code to run in each object init.
     int before_last_press_time ;
+    _lastpress = digitalRead(_pin);  // Initialize with current state
     _pin = pin;
    
 }   
+
+
+
 
 String button_press::press(){
 String return_var ;   // stores return info
@@ -19,14 +23,12 @@ _nowpress = digitalRead(_pin);
     _lastpress = 0;
     if(millis()- _presstime < 300){ // the duration of the normal press (changing this changes also the duration of long press)
       if(millis() > last_press_time + 50){ //for ignoring dual presses at the same time
-    before_last_press_time = last_press_time;
     return_var = "pressed";
     last_press_time = millis(); //updating last time pressed
     }
     }
     else{
          if(millis() > last_press_time + 10){
-    before_last_press_time = last_press_time;
     return_var = "long_pressed";
     last_press_time = millis();
     }
@@ -39,29 +41,16 @@ _nowpress = digitalRead(_pin);
 
 
 
-int button_press::bounce_press(){ // this is for changing the button value between 1 and 0  + store that value
-// one click changes the value and the value stayes after the press
-  _nowpress_bounce = digitalRead(_pin);
-  if(_nowpress_bounce == HIGH){  
-      if(_last_press_state == 0){
-        if(millis() > last_press_time_bounce + 100 ){ //ignoring multiple presses at the same time
-              _last_press_state = 1;    //changing value
-              last_press_time_bounce = millis();  //updating last time pressed
-        }
-      }
-      else if(_last_press_state == 1 ){
-          if(millis() > last_press_time_bounce + 100){
-              _last_press_state = 0;
-              last_press_time_bounce = millis();
-        }
 
 
-      }
-
-  } 
- 
 
 
- 
- return _last_press_state;
-}
+
+
+
+
+
+
+
+
+
